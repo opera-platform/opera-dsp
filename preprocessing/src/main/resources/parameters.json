@@ -1,0 +1,13 @@
+{
+  "address": {
+    "base": "0x00002000",
+    "mask": "0x000000FF"
+  },
+  "parameters": {
+    "ChirpSize": 1024,
+    "QueueDepth": 512,
+    "MaxChirpsPerFrame": 256,
+    "UseBlockRam": false,
+    "GenLast": true
+  }
+}
