@@ -59,7 +59,7 @@ lazy val commonSettings = Seq(
   resolvers ++= Seq(Resolver.mavenLocal)
 )
 
-val rocketChipDir = file("tools/rocket-chip")
+val rocketChipDir = file("dependencies/rocket-chip")
 
 /**
  * It has been a struggle for us to override settings in subprojects.
@@ -142,11 +142,11 @@ lazy val rocketchip = freshProject("rocketchip", rocketChipDir)
   )
 lazy val rocketLibDeps = rocketchip / Keys.libraryDependencies
 
-lazy val fixedpoint = freshProject("fixedpoint", file("./tools/fixedpoint"))
+lazy val fixedpoint = freshProject("fixedpoint", file("./dependencies/dsptools/fixedpoint"))
   .settings(chiselSettings)
   .settings(commonSettings)
 
-lazy val dsptools = freshProject("dsptools", file("./tools/dsptools"))
+lazy val dsptools = freshProject("dsptools", file("./dependencies/dsptools"))
   .dependsOn(fixedpoint)
   .settings(
     chiselSettings,
@@ -160,7 +160,7 @@ lazy val dsptools = freshProject("dsptools", file("./tools/dsptools"))
       "org.scalacheck" %% "scalacheck" % "1.14.3" % "test",
     ))
 
-lazy val rocket_dsp_utils = freshProject("rocket-dsp-utils", file("./tools/rocket-dsp-utils"))
+lazy val rocket_dsp_utils = freshProject("rocket-dsp-utils", file("./dependencies/rocket-dsp-utils"))
   .dependsOn(rocketchip, cde, dsptools)
   .settings(libraryDependencies ++= rocketLibDeps.value)
   .settings(commonSettings)
