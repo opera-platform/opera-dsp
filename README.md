@@ -108,7 +108,9 @@ To run the PreProcessing tests, use the following command in the project root di
 $ make test_preprocessing
 ```
 
-Test results will be stored in the `./test_run_dir` folder.
+Test results will be stored in the `./test_run_dir` folder. 
+
+By default 4,884 tests will be run, and that will take around 2 hours. The tests can be found in folder [/preprocessing/src/test/scala](preprocessing/src/test/scala). To reduce the number of tests, modify the [PreProcessingSpec](preprocessing/src/test/scala/PreProcessingSpec.scala) parameters.
 
 ## Windowing block
 
