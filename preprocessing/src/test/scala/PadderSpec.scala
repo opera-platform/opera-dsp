@@ -6,27 +6,26 @@ import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.scalatest.flatspec.AnyFlatSpec
 
-class PadderSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
+class PadderSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption with TestUtils {
   implicit val p: Parameters = Parameters.empty
   val beatBytes = 4
-  val maxSamplesPerChirp = 4
+  val maxSamplesPerChirp = 16
   val maxChirpsPerFrame = 4
-  val dataRandom = false
+  val dataRandom = true
   val silentFail = true
-  val verbose = true
+  val verbose = false
 
   val annotations = Seq(WriteVcdAnnotation, TreadleBackendAnnotation)
 
-
-  for (en <- Seq(false, true))
-    for (samples <- 1 to maxSamplesPerChirp)
-      for(samplesExpected <- 1 to samples)
-        for (chirps <- 1 to maxChirpsPerFrame) {
+  for (en <- Seq(false, true)) {
+    for (samples <- createSubSequence(1 to maxSamplesPerChirp, 4)) {
+      for (samplesExpected <- createSubSequence(1 to samples, 4)) {
+        for (chirps <- createSubSequence(1 to maxChirpsPerFrame, 4)) {
           "Padder" should s"pass when:\n" +
-                          s"\t\tenable = $en,\n" +
-                          s"\t\tnumber of samples = $samples,\n" +
-                          s"\t\texpected samples = $samplesExpected,\n" +
-                          s"\t\tchirps = $chirps" in {
+            s"\t\tenable = $en,\n" +
+            s"\t\tnumber of samples = $samples,\n" +
+            s"\t\texpected samples = $samplesExpected,\n" +
+            s"\t\tchirps = $chirps" in {
             val lazyDut = LazyModule(new Padder(maxSamplesPerChirp, maxChirpsPerFrame) with TestAXI4StreamBlock {
               override def dataBytes: Int = beatBytes
             })
@@ -38,12 +37,18 @@ class PadderSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with
               )
           }
 
-      "Padder formal" should s"pass when:\n" +
-        s"\t\tenable = $en,\n" +
-        s"\t\tnumber of samples = $samples,\n" +
-        s"\t\texpected samples = $samplesExpected,\n" +
-        s"\t\tchirps = $chirps" taggedAs FormalTag in {
-          verify(new PadderWrapper(en, maxSamplesPerChirp, maxChirpsPerFrame, samples, samplesExpected, chirps, beatBytes), annotations ++ Seq(BoundedCheck(10), DefaultBackend))
+          "Padder formal" should s"pass when:\n" +
+            s"\t\tenable = $en,\n" +
+            s"\t\tnumber of samples = $samples,\n" +
+            s"\t\texpected samples = $samplesExpected,\n" +
+            s"\t\tchirps = $chirps" taggedAs FormalTag in {
+            verify(
+              new PadderWrapper(en, maxSamplesPerChirp, maxChirpsPerFrame, samples, samplesExpected, chirps, beatBytes, verbose),
+              annotations ++ Seq(BoundedCheck(maxSamplesPerChirp), DefaultBackend)
+            )
+          }
         }
       }
+    }
+  }
 }

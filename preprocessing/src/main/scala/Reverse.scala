@@ -1,13 +1,15 @@
 package preprocessing
 
+import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.{Bool, Bundle, IO, Input, when}
 import chisel3.util.Reverse
-import freechips.rocketchip.amba.axi4stream.{AXI4StreamBundle, AXI4StreamIdentityNode, AXI4StreamNodeHandle}
+import circt.stage.{ChiselStage, FirtoolOption}
+import freechips.rocketchip.amba.axi4stream.{AXI4StreamBundle, AXI4StreamIdentityNode}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule.{LazyModule, LazyModuleImp}
 
 class ReverseIO extends Bundle {
-  val en_rev: Bool = Input(Bool())
+  val i_en: Bool = Input(Bool())
 }
 
 class Reverse extends LazyModule()(Parameters.empty) with AXI4StreamBlock {
@@ -23,10 +25,28 @@ class Reverse extends LazyModule()(Parameters.empty) with AXI4StreamBlock {
     val in:  AXI4StreamBundle = streamNode.in.head._1
 
     out <> in
-    when(io.en_rev) {
+    when(io.i_en) {
       out.bits.data := Reverse(in.bits.data)
     }.otherwise {
       out.bits.data := in.bits.data
     }
   }
+}
+
+object ReverseApp extends App {
+  implicit val p: Parameters = Parameters.empty
+
+  private val reverseModule = LazyModule(
+    new Reverse with StandaloneAXI4StreamBlock {
+      override def dataBytes: Int = 2
+    }
+  )
+
+  (new ChiselStage).execute(
+    Array("--target", "systemverilog"),
+    Seq(ChiselGeneratorAnnotation(() => reverseModule.module),
+      FirtoolOption("--disable-all-randomization"),
+      FirtoolOption("--split-verilog"),
+      FirtoolOption("--o=./rtl/Reverse"))
+  )
 }

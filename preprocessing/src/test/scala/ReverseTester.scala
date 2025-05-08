@@ -2,14 +2,11 @@ package preprocessing
 
 import chisel3._
 import chisel3.util.{Decoupled, Reverse}
-import chiseltest.experimental.observe
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.numbers.implicits._
 import freechips.rocketchip.amba.axi4stream._
 import org.chipsalliance.diplomacy.lazymodule._
 import org.chipsalliance.diplomacy.bundlebridge.{BundleBridgeSink, BundleBridgeSource}
-
-import scala.util.Random
 
 class ReverseTester
 (
@@ -32,22 +29,22 @@ class ReverseTester
     print(f"###################################\n")
   }
 
-  val mod = dut.module
+  val mod: LazyModuleImp = dut.module
   // Bind nodes
-  val inMaster = bindMaster(dut.in.getWrappedValue)
+  val inMaster: AXI4StreamPeekPokeMaster = bindMaster(dut.in.getWrappedValue)
 
   // Reset stream nodes
   resetMaster(dut.in)
   resetSlave(dut.out)
-  poke(dut.io.en_rev, en)
+  poke(dut.io.i_en, en)
   step(1)
 
   poke(dut.out.ready, true.B)
   step(1)
   // generate test array
-  val inData: Seq[BigInt] = Seq.tabulate(dataSize) { i => if(dataRandom) Random.between(0, 1 << beatBytes*8).toBigInt else i }
+  val inData: Seq[BigInt] = Seq.tabulate(dataSize) { i => if(dataRandom) scala.util.Random.between(0, 1 << beatBytes*8).toBigInt else i }
   // Generate output of the model
-  val expectedData = reverse(inData, en, beatBytes)
+  val expectedData: Seq[BigInt] = reverse(inData, en, beatBytes)
   // Add transactions
   inMaster.addTransactions(inData.zipWithIndex.map {
     case (m, i) => AXI4StreamTransaction(data = m, last = i == inData.length - 1)
@@ -56,7 +53,9 @@ class ReverseTester
   var counter = 0
   var peekedValue: BigInt = 0
   while (counter < expectedData.length) {
-    poke(dut.out.ready, Random.between(0,2))
+    // Randomize ready and valid
+    poke(dut.in.valid,  scala.util.Random.nextInt(2))
+    poke(dut.out.ready, scala.util.Random.nextInt(2))
     if (peek(dut.out.ready) === BigInt(1) && peek(dut.out.valid) === BigInt(1)) {
       peekedValue = peek(dut.out.bits.data)
       if(verbose) {
@@ -71,9 +70,8 @@ class ReverseTester
     }
     step(1)
   }
-
   step(20)
-  stepToCompletion(maxCycles = 100, silentFail = silentFail)
+  stepToCompletion(maxCycles = expectedData.length*8, silentFail = silentFail)
 }
 
 
@@ -84,19 +82,10 @@ class ReverseWrapper
   en: Boolean = true
 ) extends Module {
 
-  val lazyMod = LazyModule(new Reverse {
-    val ioInNode = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = beatBytes)))
-    val ioOutNode = BundleBridgeSink[AXI4StreamBundle]()
-
-    ioOutNode :=
-      AXI4StreamToBundleBridge(AXI4StreamSlaveParameters()) :=
-      streamNode :=
-      BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = beatBytes)) :=
-      ioInNode
-
-    val in = InModuleBody { ioInNode.makeIO() }
-    val out = InModuleBody { ioOutNode.makeIO() }
+  val lazyMod = LazyModule(new Reverse with StandaloneAXI4StreamBlock {
+    override def dataBytes: Int = beatBytes
   })
+
   val mod = Module(lazyMod.module)
 
   val input = IO(Flipped(Decoupled(chiselTypeOf(lazyMod.in.bits))))
@@ -104,7 +93,7 @@ class ReverseWrapper
 
   input <> lazyMod.in
   output <> lazyMod.out
-  lazyMod.io.en_rev := en.B
+  lazyMod.io.i_en := en.B
 
   var inData: Seq[UInt] = Seq[UInt]()
   when(input.fire) {

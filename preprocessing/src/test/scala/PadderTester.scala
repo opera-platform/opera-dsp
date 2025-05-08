@@ -1,12 +1,11 @@
 package preprocessing
 
 import chisel3._
-import chisel3.util.{Cat, Decoupled, log2Ceil}
+import chisel3.util.{Decoupled, log2Ceil}
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.numbers.implicits._
 import freechips.rocketchip.amba.axi4stream._
 import org.chipsalliance.diplomacy.lazymodule._
-import upack.Msg.InvalidData
 
 import scala.util.Random
 
@@ -24,7 +23,7 @@ class PadderTester
 ) extends PeekPokeTester(dut.module) with AXI4StreamModel[LazyModuleImp] with TestUtils {
 
   if (verbose) {
-    print(f"\n###################################\n")
+    print(f"\n#####################################\n")
     print(f"# Padder options: \n")
     print(f"# \tenable          = $en\n")
     print(f"# \tsamples         = $samples\n")
@@ -32,17 +31,17 @@ class PadderTester
     print(f"# \tchirps          = $chirps\n")
     print(f"# \tdataRandom      = $dataRandom\n")
     print(f"# \tbeatBytes       = $beatBytes\n")
-    print(f"###################################\n")
+    print(f"#####################################\n")
   }
 
-  val mod = dut.module
+  val mod: LazyModuleImp = dut.module
   // Bind nodes
-  val inMaster = bindMaster(dut.in.getWrappedValue)
+  val inMaster: AXI4StreamPeekPokeMaster = bindMaster(dut.in.getWrappedValue)
 
   // Reset stream nodes
   resetMaster(dut.in)
   resetSlave(dut.out)
-  poke(dut.io.i_en_zero, en)
+  poke(dut.io.i_en, en)
   poke(dut.io.i_samples, samples.U)
   poke(dut.io.i_samples_expected, samplesExpected.U)
   poke(dut.io.i_chirps, chirps.U)
@@ -51,9 +50,9 @@ class PadderTester
   poke(dut.out.ready, true.B)
   step(1)
   // generate test array
-  val inData: Seq[BigInt] = Seq.tabulate(samplesExpected*chirps) { i => if(dataRandom) Random.between(0, 1 << beatBytes*8).toBigInt else i }
+  val inData: Seq[BigInt] = Seq.tabulate(samplesExpected*chirps) { i => if(dataRandom) BigInt(beatBytes*8, Random) else i }
   // Generate output of the model
-  val expectedData = pad(inData, en, samples, samplesExpected, chirps)
+  val expectedData: Seq[BigInt] = pad(inData, en, samples, samplesExpected, chirps)
   // Add transactions
   inMaster.addTransactions(inData.zipWithIndex.map {
     case (m, i) => AXI4StreamTransaction(data = m, last = i == inData.length/chirps - 1)
@@ -62,7 +61,9 @@ class PadderTester
   var counter = 0
   var peekedValue: BigInt = 0
   while (counter < expectedData.length) {
-//    poke(dut.out.ready, Random.between(0,2))
+    // Randomize ready and valid
+    poke(dut.in.valid,  scala.util.Random.nextInt(2))
+    poke(dut.out.ready, scala.util.Random.nextInt(2))
     if (peek(dut.out.ready) === BigInt(1) && peek(dut.out.valid) === BigInt(1)) {
       peekedValue = peek(dut.out.bits.data)
       if(verbose) {
@@ -79,9 +80,8 @@ class PadderTester
   }
 
   step(20)
-  stepToCompletion(maxCycles = 100, silentFail = silentFail)
+  stepToCompletion(maxCycles = expectedData.length*8, silentFail = silentFail)
 }
-
 
 // Module Wrapper for formal verification
 class PadderWrapper
@@ -92,11 +92,12 @@ class PadderWrapper
   samples: Int,
   samplesExpected: Int,
   chirps: Int,
-  beatBytes: Int
+  beatBytes: Int,
+  verbose: Boolean = false
 ) extends Module {
 
   val lazyMod = LazyModule(new Padder(maxSamplesPerChirp, maxChirpsPerFrame) with StandaloneAXI4StreamBlock {
-    override def dataBytes = beatBytes
+    override def dataBytes: Int = beatBytes
   })
 
   val mod = Module(lazyMod.module)
@@ -106,7 +107,7 @@ class PadderWrapper
 
   input <> lazyMod.in
   output <> lazyMod.out
-  lazyMod.io.i_en_zero := en.B
+  lazyMod.io.i_en := en.B
   lazyMod.io.i_samples := samples.U
   lazyMod.io.i_samples_expected := samplesExpected.U
   lazyMod.io.i_chirps := chirps.U
@@ -124,10 +125,11 @@ class PadderWrapper
     when(input.bits.last) { lastFlag := true.B }
   }
 
-
-  printf(p"counter: $counter, ")
-  printf(p"input: ${input.bits.data}, ")
-  printf(p"output: ${output.bits.data}\n")
+  if (verbose) {
+    printf(p"counter: $counter, ")
+    printf(p"input: ${input.bits.data}, ")
+    printf(p"output: ${output.bits.data}\n")
+  }
 
   // Check output
   when(output.fire && mod.reset === false.B) {

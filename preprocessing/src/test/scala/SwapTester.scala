@@ -2,7 +2,6 @@ package preprocessing
 
 import chisel3._
 import chisel3.util.{Cat, Decoupled}
-import chiseltest.formal.past
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.numbers.implicits._
 import freechips.rocketchip.amba.axi4stream._
@@ -34,15 +33,15 @@ class SwapTester
     print(f"###################################\n")
   }
 
-  val mod = dut.module
+  val mod: LazyModuleImp = dut.module
   // Bind nodes
-  val inMaster = bindMaster(dut.in.getWrappedValue)
+  val inMaster: AXI4StreamPeekPokeMaster = bindMaster(dut.in.getWrappedValue)
 
   // Reset stream nodes
   resetMaster(dut.in)
   resetSlave(dut.out)
-  poke(dut.io.en_swap, en)
-  poke(dut.io.r_format, format.U)
+  poke(dut.io.i_en, en)
+  poke(dut.io.i_format, format.U)
   step(1)
 
   poke(dut.out.ready, true.B)
@@ -50,7 +49,7 @@ class SwapTester
   // generate test array
   val inData: Seq[BigInt] = Seq.tabulate(dataSize) { i => if(dataRandom) Random.between(0, 1 << beatBytes*8/2).toBigInt else i }
   // Generate output of the model
-  val expectedData = swap(inData, format, en, beatBytes/2)
+  val expectedData: Seq[BigInt] = swap(inData, format, en, beatBytes/2)
   // Add transactions
   inMaster.addTransactions(inData.zipWithIndex.map {
     case (m, i) => AXI4StreamTransaction(data = m, last = i == inData.length - 1)
@@ -59,7 +58,9 @@ class SwapTester
   var counter = 0
   var peekedValue: BigInt = 0
   while (counter < expectedData.length) {
-    poke(dut.out.ready, Random.between(0,2))
+    // Randomize ready and valid
+    poke(dut.in.valid,  scala.util.Random.nextInt(2))
+    poke(dut.out.ready, scala.util.Random.nextInt(2))
     if (peek(dut.out.ready) === BigInt(1) && peek(dut.out.valid) === BigInt(1)) {
       peekedValue = peek(dut.out.bits.data)
       if(verbose) {
@@ -74,9 +75,8 @@ class SwapTester
     }
     step(1)
   }
-
   step(20)
-  stepToCompletion(maxCycles = 100, silentFail = silentFail)
+  stepToCompletion(maxCycles = expectedData.length*8, silentFail = silentFail)
 }
 
 
@@ -88,18 +88,8 @@ class SwapWrapper
   format: Int
 ) extends Module {
 
-  val lazyMod = LazyModule(new Swap(beatBytes) {
-    val ioInNode = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = beatBytes/2)))
-    val ioOutNode = BundleBridgeSink[AXI4StreamBundle]()
-
-    ioOutNode :=
-      AXI4StreamToBundleBridge(AXI4StreamSlaveParameters()) :=
-      streamNode :=
-      BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = beatBytes/2)) :=
-      ioInNode
-
-    val in = InModuleBody { ioInNode.makeIO() }
-    val out = InModuleBody { ioOutNode.makeIO() }
+  val lazyMod = LazyModule(new Swap(beatBytes) with StandaloneAXI4StreamBlock {
+    override def dataBytes: Int = beatBytes/2
   })
   val mod = Module(lazyMod.module)
 
@@ -108,8 +98,8 @@ class SwapWrapper
 
   input <> lazyMod.in
   output <> lazyMod.out
-  lazyMod.io.en_swap := en.B
-  lazyMod.io.r_format := format.U
+  lazyMod.io.i_en := en.B
+  lazyMod.io.i_format := format.U
 
   var inData: Seq[UInt] = Seq[UInt]()
   when(input.fire) {

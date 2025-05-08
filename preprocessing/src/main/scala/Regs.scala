@@ -5,5 +5,7 @@ object Regs {
   val expectedsize  = 0x04
   val chirpperframe = 0x08
   val dataformat    = 0x0c
-  val ctrl          = 0x10
+  val crcvalue      = 0x10  // read-only
+  val crcstatus     = 0x14  // read-only
+  val ctrl          = 0x18
 }

@@ -9,42 +9,28 @@ import org.scalatest.flatspec.AnyFlatSpec
 class ReverseSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
   implicit val p: Parameters = Parameters.empty
   val beatBytes = 2
-  val dataSize = 8
-  val dataRandom = false
+  val dataSize = 128
+  val dataRandom = true
   val silentFail = true
-  val verbose = true
+  val verbose = false
 
   val annotations = Seq(WriteVcdAnnotation, TreadleBackendAnnotation)
 
-  "Reverse" should "pass when reverse is enabled" in {
-    val lazyDut = LazyModule(new Reverse with TestAXI4StreamBlock {
-      override def dataBytes: Int = beatBytes
-    })
+  for (en <- Seq(true, false)) {
+    "Reverse" should f"pass when enable = $en" in {
+      val lazyDut = LazyModule(new Reverse with TestAXI4StreamBlock {
+        override def dataBytes: Int = beatBytes
+      })
 
-    test(lazyDut.module)
-      .withAnnotations(annotations)
-      .runPeekPoke(
-        _ => new ReverseTester(lazyDut, en = true, dataSize, dataRandom, beatBytes, silentFail, verbose)
-      )
-  }
+      test(lazyDut.module)
+        .withAnnotations(annotations)
+        .runPeekPoke(
+          _ => new ReverseTester(lazyDut, en, dataSize, dataRandom, beatBytes, silentFail, verbose)
+        )
+    }
 
-  "Reverse" should "pass when reverse is disabled" in {
-    val lazyDut = LazyModule(new Reverse with TestAXI4StreamBlock {
-      override def dataBytes: Int = beatBytes
-    })
-
-    test(lazyDut.module)
-      .withAnnotations(annotations)
-      .runPeekPoke(
-        _ => new ReverseTester(lazyDut, en = false, dataSize, dataRandom, beatBytes, silentFail, verbose)
-      )
-  }
-
-  "Reverse formal" should "pass when reverse is enabled" taggedAs FormalTag in {
-    verify(new ReverseWrapper(beatBytes, en = true), Seq(BoundedCheck(200), DefaultBackend))
-  }
-
-  "Reverse formal" should "pass when reverse is disabled" taggedAs FormalTag in {
-    verify(new ReverseWrapper(beatBytes, en = false), Seq(BoundedCheck(200), DefaultBackend))
+    "Reverse formal" should f"pass when enable = $en" taggedAs FormalTag in {
+      verify(new ReverseWrapper(beatBytes, en), Seq(BoundedCheck(200), DefaultBackend))
+    }
   }
 }

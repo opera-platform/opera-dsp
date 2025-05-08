@@ -9,18 +9,18 @@ import org.scalatest.flatspec.AnyFlatSpec
 class SwapSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
   implicit val p: Parameters = Parameters.empty
   val beatBytes = 4
-  val dataSize = 8
-  val dataRandom = false
+  val dataSize = 256
+  val dataRandom = true
   val silentFail = true
-  val verbose = true
+  val verbose = false
 
   val annotations = Seq(WriteVcdAnnotation, TreadleBackendAnnotation)
 
   for (format <- 0 to 3)
     for (en <- Seq(false, true)) {
-      "Swap" should s"pass when enable = ${en} and format = $format" in {
+      "Swap" should s"pass when enable = $en and format = $format" in {
         val lazyDut = LazyModule(new Swap(beatBytes) with TestAXI4StreamBlock {
-          override def dataBytes: Int = beatBytes
+          override def dataBytes: Int = beatBytes/2
         })
 
         test(lazyDut.module)
@@ -31,7 +31,7 @@ class SwapSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with F
       }
 
       "Swap formal" should s"pass when enable = $en and format = $format" taggedAs FormalTag in {
-        verify(new SwapWrapper(beatBytes, en, format), Seq(BoundedCheck(100), DefaultBackend))
+        verify(new SwapWrapper(beatBytes, en, format), Seq(BoundedCheck(200), DefaultBackend))
       }
   }
 }

@@ -1,9 +1,6 @@
 package preprocessing
 
-import chisel3.{UInt, fromIntToLiteral}
-import freechips.rocketchip.amba.axi4stream.{AXI4StreamBuffer, AXI4StreamBundle, AXI4StreamBundleParameters, AXI4StreamMasterParameters, AXI4StreamSlaveParameters, AXI4StreamToBundleBridge, BundleBridgeToAXI4Stream}
-import org.chipsalliance.diplomacy.bundlebridge.{BundleBridgeSink, BundleBridgeSource}
-import org.chipsalliance.diplomacy.lazymodule.{InModuleBody, LazyModule}
+import scala.annotation.tailrec
 
 trait TestUtils {
   // Reverse model. Reverse bits in data
@@ -58,6 +55,37 @@ trait TestUtils {
     else data
   }
 
+  private def reflect(data: Long, bits: Int): Long = {
+    @tailrec
+    def loop(i: Int, result: Long): Long = {
+      if (i == 0) result
+      else {
+        val bit = (data >> (bits - i)) & 1
+        loop(i - 1, (result << 1) | bit)
+      }
+    }
+
+    loop(bits, 0)
+  }
+
+  def crc32(data: Array[Byte], params: CRCParameters, crcWidth: Int): Long = {
+    val topBit = 1L << (crcWidth - 1)
+    val mask = if (crcWidth >= 64) -1L else (1L << crcWidth) - 1
+    var crc = params.init & mask
+
+    for (b <- data) {
+      val byte = if (params.reflectIn) reflect(b & 0xFF, 8) else b & 0xFF
+      crc ^= (byte << (crcWidth - 8)) & mask
+      for (_ <- 0 until 8) {
+        crc = if ((crc & topBit) != 0) ((crc << 1) ^ params.polynomial) & mask
+        else (crc << 1) & mask
+      }
+    }
+
+    if (params.reflectOut) crc = reflect(crc, crcWidth)
+    (crc ^ params.xorOut) & mask
+  }
+
   // PreProcessing model
   def transform(
                  data: Seq[BigInt],
@@ -79,7 +107,7 @@ trait TestUtils {
 
   // Format string
   def formatString(data: BigInt, dataBytes:Int): String = {
-    // Determine how meny hex numbers wy need to print dataBytes number of Bytes
+    // Determine how many hex numbers wy need to print dataBytes number of Bytes
     val hexNumbers = dataBytes * 2
     // Convert BigInt to uppercase Hex
     val peekedString = data.toString(16).toUpperCase
@@ -87,8 +115,21 @@ trait TestUtils {
     if (peekedString.length >= hexNumbers) peekedString
     else "0" * (hexNumbers - peekedString.length) + peekedString
   }
-}
 
+  // Create sub sequence of length M from given sequence X
+  def createSubSequence(X: Seq[Int], M: Int): Seq[Int] = {
+    val N = X.length
+    require(N > 0, "Sequence X must not be empty.")
+    require(M > 0, "M must be greater than 0.")
+
+    if (M >= N) {
+      X // If requested M exceeds or equals available elements, return all elements.
+    } else {
+      val indexes = (0 until M).map(i => ((i.toDouble * (N - 1)) / (M - 1)).round.toInt)
+      indexes.map(X)
+    }
+  }
+}
 
 case class RegConfiguration (
   chirpsize: Int,
@@ -104,20 +145,3 @@ case class RegConfiguration (
 case class TestConfiguration (
   regs: Seq[RegConfiguration]
 )
-
-// AXI4StreamBlock Standalone wrapper for test
-trait TestAXI4StreamBlock extends AXI4StreamBlock {
-  def dataBytes = 4
-
-  val ioInNode = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = dataBytes)))
-  val ioOutNode = BundleBridgeSink[AXI4StreamBundle]()
-
-  ioOutNode :=
-    AXI4StreamToBundleBridge(AXI4StreamSlaveParameters()) :=
-    streamNode := AXI4StreamBuffer(1) :=
-    BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = dataBytes)) :=
-    ioInNode
-
-  val in = InModuleBody { ioInNode.makeIO() }
-  val out = InModuleBody { ioOutNode.makeIO() }
-}

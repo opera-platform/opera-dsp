@@ -4,10 +4,19 @@
     "mask": "0x000000FF"
   },
   "parameters": {
-    "ChirpSize": 1024,
-    "QueueDepth": 512,
-    "MaxChirpsPerFrame": 256,
-    "UseBlockRam": false,
-    "GenLast": true
+    "MaxChirpSize": 1024,
+    "MaxChirpsPerFrame": 256
+  },
+  "crcParameters": {
+    "dataBytes": 2,
+    "polynomial": "0x04C11DB7L",
+    "init": "0xFFFFFFFFL",
+    "reflectIn": false,
+    "reflectOut": false,
+    "xorOut": "0x00000000L"
+  },
+  "bufferParameters": {
+    "insertBuffers": false,
+    "size": 2
   }
 }

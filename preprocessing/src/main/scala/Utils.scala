@@ -1,57 +1,52 @@
 package preprocessing
 
-import freechips.rocketchip.amba.axi4stream._
-import org.chipsalliance.diplomacy.bundlebridge.{BundleBridgeSink, BundleBridgeSource}
-import org.chipsalliance.diplomacy.lazymodule.{InModuleBody, LazyModule}
+import freechips.rocketchip.diplomacy.AddressSet
 import play.api.libs.json.Json
-
 import java.io.FileNotFoundException
 
-trait AXI4StreamBlock extends LazyModule {
-  /**
-   * Diplomatic node for AXI4-Stream interfaces
-   */
-  val streamNode: AXI4StreamNodeHandle
-}
-
-// AXI4StreamBlock Standalone wrapper
-trait StandaloneAXI4StreamBlock extends AXI4StreamBlock {
-  def dataBytes = 4
-
-  val ioInNode = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = dataBytes)))
-  val ioOutNode = BundleBridgeSink[AXI4StreamBundle]()
-
-  ioOutNode :=
-    AXI4StreamToBundleBridge(AXI4StreamSlaveParameters()) :=
-    streamNode :=
-    BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = dataBytes)) :=
-    ioInNode
-
-  val in = InModuleBody { ioInNode.makeIO() }
-  val out = InModuleBody { ioOutNode.makeIO() }
-}
-
 object ParseParameters {
-  def parseconfig(filename: String): Either[BlockParameters, Unit] = {
+  def parseconfig(filename: String) = {
     try {
       val resource = scala.io.Source.fromFile(filename)
       val content = Json.parse(resource.getLines().mkString)
-
-      val chirpSize = (content \ "parameters" \ "ChirpSize").get.as[Int]
-      val queueDepth = (content \ "parameters" \ "QueueDepth").get.as[Int]
-      val maxChirpsPerFrame = (content \ "parameters" \ "MaxChirpsPerFrame").get.as[Int]
-      val useBlockRam = (content \ "parameters" \ "UseBlockRam").get.as[Boolean]
-      val genLast = (content \ "parameters" \ "GenLast").get.as[Boolean]
-
-      Left(
-        BlockParameters(
-          ChirpSize = chirpSize,
-          QueueDepth = queueDepth,
-          MaxChirpsPerFrame = maxChirpsPerFrame,
-          UseBlockRam = useBlockRam,
-          GenLast = genLast
-        )
+      // Read Address
+      val address = AddressSet(
+        base = BigInt((content \ "address" \ "base").get.as[String].stripSuffix("L").drop(2), 16),
+        mask = BigInt((content \ "address" \ "mask").get.as[String].stripSuffix("L").drop(2), 16)
       )
+      // Read Parameters
+      val maxChirpSize         = (content \ "parameters" \ "MaxChirpSize").get.as[Int]
+      val maxChirpsPerFrame = (content \ "parameters" \ "MaxChirpsPerFrame").get.as[Int]
+      // Read CRC parameters
+      val crcParams = CRCParameters(
+        dataBytes  = (content \ "crcParameters" \ "dataBytes").get.as[Int],
+        polynomial = java.lang.Long.parseUnsignedLong(
+          (content \ "crcParameters" \ "polynomial").get.as[String].stripSuffix("L").drop(2), 16
+        ),
+        init = java.lang.Long.parseUnsignedLong(
+          (content \ "crcParameters" \ "init").get.as[String].stripSuffix("L").drop(2), 16
+        ),
+        reflectIn  = (content \ "crcParameters" \ "reflectIn").get.as[Boolean],
+        reflectOut = (content \ "crcParameters" \ "reflectOut").get.as[Boolean],
+        xorOut = java.lang.Long.parseUnsignedLong(
+          (content \ "crcParameters" \ "xorOut").get.as[String].stripSuffix("L").drop(2), 16
+        ),
+      )
+      // Read Buffer parameters
+      val bufferParams = BufferParameters(
+        insertBuffers = (content \ "bufferParameters" \ "insertBuffers").get.as[Boolean],
+        size          = (content \ "bufferParameters" \ "size").get.as[Int],
+      )
+
+      Left((
+        address,
+        PreProcessingParameters(
+          MaxChirpSize = maxChirpSize,
+          MaxChirpsPerFrame = maxChirpsPerFrame,
+          CrcParams = crcParams,
+          BufferParams = bufferParams
+        )
+      ))
     } catch {
       case e: FileNotFoundException => throw e
       case e: Throwable =>
