@@ -1,8 +1,17 @@
 .bsp
+# Cloned files
 dependencies
+# Generated documentation
+docs/*/build
+docs/*/preprocessing.pdf
+# SBT files
 preprocessing/target
 project/project
 project/target
+project/build.properties
 target
+# Test files
 test_run_dir
+# SV files
 rtl
+*.sv
