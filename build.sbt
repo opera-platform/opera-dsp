@@ -174,3 +174,13 @@ lazy val preprocessing = (project in file("preprocessing"))
     libraryDependencies ++= Seq("com.typesafe.play" %% "play-json" % "2.10.6")
   )
   .settings(commonSettings)
+
+lazy val windowing = (project in file("windowing"))
+  .dependsOn(rocketchip, rocket_dsp_utils)
+  .settings(
+    libraryDependencies ++= rocketLibDeps.value,
+    libraryDependencies ++= Seq("edu.berkeley.cs" %% "chiseltest" % chiselTestVersion),
+    libraryDependencies ++= Seq("com.typesafe.play" %% "play-json" % "2.10.6"),
+    libraryDependencies ++= Seq("org.scalanlp" %% "breeze" % "2.1.0")
+  )
+  .settings(commonSettings)
