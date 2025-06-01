@@ -1,6 +1,5 @@
 package windowing
 
-//import dspblocks.mems.Queue
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util.experimental.loadMemoryFromFileInline
@@ -14,10 +13,10 @@ import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.regmapper._
+import freechips.rocketchip.resources.{Device, DeviceRegName, DiplomaticSRAM, SimpleDevice}
+import freechips.rocketchip.tilelink.{TLBundle, TLBundleParameters, TLClientPortParameters, TLEdgeIn, TLEdgeOut, TLIdentityNode, TLManagerPortParameters, TLRegisterNode, TLXbar}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
-import freechips.rocketchip.resources.{Device, DeviceRegName, DiplomaticSRAM}
-
 
 class WindowingAXI4[T <: Data: Real: BinaryRepresentation](
   csrAddress: AddressSet,
@@ -36,8 +35,8 @@ class WindowingAXI4[T <: Data: Real: BinaryRepresentation](
     AXI4Bundle] (ramAddress, params, beatBytes)
     with AXI4DspBlock {
 
-  val registerNode = Some(AXI4RegisterNode(address = csrAddress, beatBytes))
-  val ramNode =
+  private val registerNode = Some(AXI4RegisterNode(address = csrAddress, beatBytes))
+  private val ramNode =
     if (params.constWindow) None
     else {
       Some(AXI4SramNode(
@@ -50,7 +49,7 @@ class WindowingAXI4[T <: Data: Real: BinaryRepresentation](
     }
 
 
-  override def srammap(sram: SyncReadMem[Vec[UInt]]) = {
+  override def srammap(sram: SyncReadMem[Vec[UInt]]): Unit = {
     if (ramNode.isDefined) ramNode.get.srammap(sram) else ()
   }
 
@@ -71,17 +70,74 @@ class WindowingAXI4[T <: Data: Real: BinaryRepresentation](
   override def regmap(mapping: (Int, Seq[RegField])*): Unit = registerNode.get.regmap(mapping: _*)
 }
 
-abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <: Data](
+class WindowingTL[T <: Data: Real: BinaryRepresentation](
+  csrAddress: AddressSet,
   ramAddress: AddressSet,
-  params: WindowingParams[T],
-  beatBytes:  Int,
-  devName: Option[String] = None,
-  dtsCompat: Option[Seq[String]] = None,
+  params    : WindowingParams[T],
+  beatBytes : Int
+)(implicit p: Parameters)
+  extends Windowing[
+    T,
+    TLClientPortParameters,
+    TLManagerPortParameters,
+    TLEdgeOut,
+    TLEdgeIn,
+    TLBundle] (ramAddress, params, beatBytes)
+    with TLDspBlock {
+
+  private val registerNode = Some(TLRegisterNode(
+    address = Seq(csrAddress),
+    device = new SimpleDevice("windowing-regs", Nil),
+    beatBytes = beatBytes))
+  private val ramNode =
+    if (params.constWindow) None
+    else {
+      Some(TLSramNode(
+        address   = address,
+        resources = resources,
+        beatBytes = beatBytes,
+        devName  = Some("tlram")
+      ))
+    }
+
+  override def srammap(sram: SyncReadMem[Vec[UInt]]): Unit = {
+    if (ramNode.isDefined) ramNode.get.srammap(sram) else ()
+  }
+
+  override val mem =
+    if (params.constWindow)
+      registerNode
+    else {
+      val node = TLIdentityNode()
+      val topXbar = TLXbar()
+      // Connect nodes
+      ramNode.get      := topXbar
+      registerNode.get := topXbar
+      topXbar          := node
+      // Return node
+      Some(node)
+    }
+
+  override def regmap(mapping: (Int, Seq[RegField])*): Unit = registerNode.get.regmap(mapping: _*)
+}
+
+abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <: Data](
+  ramAddress : AddressSet,
+  params     : WindowingParams[T],
+  beatBytes  : Int,
+  devName    : Option[String] = None,
+  dtsCompat  : Option[Seq[String]] = None,
   devOverride: Option[Device with DeviceRegName] = None
 )(implicit p: Parameters) extends DiplomaticSRAM(ramAddress, beatBytes, devName, dtsCompat, devOverride)
   with DspBlock[D, U, E, O, B]
   with HasCSR
   with HasSRAM {
+
+  // The width of the bus must be divisible by the width of the coefficients.
+  assert(
+    (beatBytes*8) % params.coeffType.getWidth == 0,
+    f"Bus width is not divisible by the width of the coefficients."
+  )
 
   // AXI4 stream IN/OUT node
   val streamNode = AXI4StreamIdentityNode()
@@ -121,25 +177,26 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
 
       // Write window function to text file
       val fileName = if (params.memoryFile.isEmpty) s"./test_run_dir/${params.windowFunc}.txt" else params.memoryFile
-      Utils.writeWindowFunction2File(fileName = fileName, dataType = params.coeffType, window = windowSeq)
+      Utils.writeWindowFunction2File(
+        fileName  = fileName,
+        dataType  = params.coeffType,
+        window    = windowSeq,
+        dataBytes = params.coeffType.getWidth/8
+      )
 
       // Address
       val r_address = RegInit(0.U(log2Ceil(params.numPoints).W))
 
       // Wires
-      val w_in_complex =
-        if (params.constWindow)
-          in.bits.data.asTypeOf(params.dataType)
-        else
-          RegNext(in.bits.data.asTypeOf(params.dataType)) // TODO: Postoji li razlog za delay?
+      val w_in_complex  = Wire(params.dataType.cloneType)
       val w_out_complex = Wire(params.dataType.cloneType)
 
       // RAM declaration
       val ram: Option[SyncReadMem[Vec[UInt]]] = if (!params.constWindow) {
         Some(makeSinglePortedByteWriteSeqMem(
-          size = BigInt(1) << mask.filter(b => b).size,
-          lanes = beatBytes,
-          bits = 8))
+          size  = BigInt(1) << mask.count(b => b),
+          lanes = 1,
+          bits  = params.coeffType.getWidth))
       } else None
       if (ram.isDefined) {
         srammap(ram.get)
@@ -156,11 +213,18 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
         })))
       } else None
 
-
       // Increment window address
       when(in.fire) { r_address := Mux(r_address === (w_size - 1.U), 0.U, r_address + 1.U) }
       // Get window coefficient
-      val coefficient = if (params.constWindow) rom.get(r_address) else ram.get(r_address).asTypeOf(params.coeffType)
+      val coefficient =
+        // get coefficients from ROM
+        if (params.constWindow) {
+          rom.get(r_address)
+        // get coefficient's from RAM
+        } else {
+          // Read one RAM word from memory
+          ram.get(r_address).asTypeOf(params.coeffType)
+        }
 
       // Multiplication with the windowing coefficient
       when(r_en) {
@@ -168,7 +232,6 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
         DspContext.alter(
           DspContext.current.copy(
             trimType = params.trimType,
-            numMulPipes = params.numMulPipes,
             binaryPointGrowth = 0
           )
         ) {
@@ -177,51 +240,47 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
         }
       }.otherwise {
         // Otherwise just pass the input data to the output
-        w_out_complex := ShiftRegister(w_in_complex, params.numMulPipes, true.B)
+        w_out_complex := w_in_complex
       }
-
-      // Add delay if needed
-      if (params.constWindow && params.numMulPipes == 0) {
+      if (params.constWindow) {
+        in.ready      := out.ready
         out.valid     := in.valid
-        out.bits.data := w_out_complex.asUInt
         out.bits.last := in.bits.last
+        w_in_complex  := in.bits.data.asTypeOf(params.dataType)
       } else {
-        val queueDelay = if (params.constWindow) params.numMulPipes + 1 else params.numMulPipes + 2
-        val inputsDelay = if (params.constWindow) params.numMulPipes else params.numMulPipes + 1
-        val queueData = Module(new Queue(params.dataType.cloneType, queueDelay, flow = true)) // + 1 for input delaying
-        queueData.io.enq.bits := w_out_complex
-        queueData.io.enq.valid := ShiftRegister(in.valid, inputsDelay, true.B)
-        queueData.io.deq.ready := out.ready
+        val r_data  = Reg(params.dataType.cloneType)
+        val r_valid = RegInit(false.B)
+        val r_last  = Reg(Bool())
+        when(in.ready) {
+          r_data  := in.bits.data.asTypeOf(params.dataType)
+          r_valid := in.valid
+          r_last  := in.bits.last
+        }
 
-        val queueLast = Module(new Queue(Bool(), queueDelay, flow = true)) // +1 for input delaying
-        queueLast.io.enq.valid := ShiftRegister(in.valid, inputsDelay, true.B) // +1 for input delaying
-        queueLast.io.enq.bits := ShiftRegister(in.bits.last, inputsDelay, true.B) // +1 for input delaying
-        queueLast.io.deq.ready := out.ready
-
-        // Connect output
-        out.valid := queueData.io.deq.valid
-        out.bits.data := queueData.io.deq.bits.asUInt
-        out.bits.last := queueLast.io.deq.bits
+        w_in_complex  := r_data
+        in.ready      := !r_valid || out.ready
+        out.valid     := r_valid
+        out.bits.last := r_last
       }
-      in.ready := out.ready
+      out.bits.data := w_out_complex.asUInt
+
     } else {
       out <> in
     }
   }
 }
 
-object WindowingApp extends App {
+object WindowingAXI4App extends App {
   implicit val p: Parameters = Parameters.empty
 
-  val beatBytes = 4
-  val paramsWindowing = WindowingParams.fixed(
+  private val beatBytes = 4
+  private val paramsWindowing = WindowingParams.fixed(
     numPoints   = 1024,
     dataWidth   = 16,
     binPoint    = 14,
-    numMulPipes = 1,
-    constWindow = true,
+    constWindow = false,
     trimType    = Convergent,
-    memoryFile  = "",
+    memoryFile  = "./rtl/WindowingAXI4/window.txt",
     windowFunc  = BlackmanWindow(N=1024, periodic = true)
   )
 
@@ -245,6 +304,54 @@ object WindowingApp extends App {
       FirtoolOption("--disable-all-randomization"),
       FirtoolOption("--split-verilog"),
       FirtoolOption("--o=./rtl/WindowingAXI4")
+    )
+  )
+}
+
+object WindowingTLApp extends App {
+  implicit val p: Parameters = Parameters.empty
+
+  private val beatBytes = 4
+  private val paramsWindowing = WindowingParams.fixed(
+    numPoints   = 1024,
+    dataWidth   = 16,
+    binPoint    = 14,
+    constWindow = false,
+    trimType    = Convergent,
+    memoryFile  = "",
+    windowFunc  = BlackmanWindow(N=1024, periodic = true)
+  )
+
+  private val windowingModule = LazyModule(
+    new WindowingTL[FixedPoint](
+      csrAddress = AddressSet(0x010000, 0xff),
+      ramAddress = AddressSet(0x000000, 0x0fff),
+      params     = paramsWindowing,
+      beatBytes  = beatBytes
+    ) with StandaloneTLBlock {
+      override def standaloneParams =
+        TLBundleParameters(
+          addressBits    = beatBytes*8,
+          dataBits       = beatBytes*8,
+          sourceBits     = 1,
+          sinkBits       = 1,
+          sizeBits       = 1,
+          echoFields     = Seq(),
+          requestFields  = Seq(),
+          responseFields = Seq(),
+          hasBCE         = false
+        )
+      override def dataBytes: Int = 4
+    }
+  )
+
+  (new ChiselStage).execute(
+    Array("--target", "systemverilog"),
+    Seq(
+      ChiselGeneratorAnnotation(() => windowingModule.module),
+      FirtoolOption("--disable-all-randomization"),
+      FirtoolOption("--split-verilog"),
+      FirtoolOption("--o=./rtl/WindowingTL")
     )
   )
 }
