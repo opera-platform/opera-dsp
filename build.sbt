@@ -184,3 +184,8 @@ lazy val windowing = (project in file("windowing"))
     libraryDependencies ++= Seq("org.scalanlp" %% "breeze" % "2.1.0")
   )
   .settings(commonSettings)
+  .settings(
+    Test / unmanagedResourceDirectories += baseDirectory.value / "src" / "main" / "resources" / "vsrc",
+    Test / fork := true
+  )
+
