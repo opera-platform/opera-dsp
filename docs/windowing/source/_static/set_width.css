@@ -1,0 +1,10 @@
+/* set_width.css */
+.wy-nav-content {
+  max-width: 100% !important;
+}
+
+.rst-content table.docutils {
+  width: 100% !important;
+  table-layout: auto;
+  word-break: break-word;
+}
