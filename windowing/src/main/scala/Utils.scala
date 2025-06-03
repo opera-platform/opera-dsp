@@ -6,43 +6,42 @@ import dsptools.numbers.{Ceiling, Convergent, Floor, Round}
 import fixedpoint.FixedPoint
 
 import java.io.{BufferedWriter, File, FileWriter}
+import scala.math.BigDecimal.double2bigDecimal
 
 object Utils {
-  def roundWithMode(x: Double, mode: TrimType): Double = mode match {
-    case Ceiling => math.ceil(x)
-    case Floor => math.floor(x)
-    case Convergent =>
-      // Bankers' rounding: round to nearest even integer on .5
-      val floor = math.floor(x)
-      val frac = x - floor
-      if (frac == 0.5 || frac == -0.5) {
-        // x is halfway between two integers
-        if (floor % 2 == 0) floor
-        else floor + (if (x > 0) 1 else -1)
-      } else {
-        math.round(x).toDouble
-      }
-    case Round =>
-      // Round half away from zero (up for positive, down for negative)
-      val floor = math.floor(x)
-      val frac = x - floor
-      if (math.abs(frac) == 0.5) {
-        if (x > 0) floor + 1
-        else floor - 1
-      } else {
-        math.round(x).toDouble
-      }
+  def roundTiesToEven(x: Double): Int = {
+    if (x < 0) {
+      // Use symmetry for negative numbers
+      -roundTiesToEven(-x)
+    } else {
+      val intPart = math.floor(x)
+      val fracPart = x - intPart
+      (intPart.toInt +
+        (if (fracPart > 0.5 ||
+          (fracPart == 0.5 && intPart % 2 == 1)) 1 else 0))
+    }
   }
-
-  def doubleToQmn(x: Double, m: Int, n: Int, rounding: TrimType): Int = {
-    val scale = 1 << n
-    val scaled = x * scale
-    val rounded = roundWithMode(scaled, rounding)
-    // Clamp to Qm.n range
-    val totalBits = m + n
-    val maxVal = (1 << (totalBits - 1)) - 1
-    val minVal = -(1 << (totalBits - 1))
-    rounded.toInt.max(minVal).min(maxVal)
+  def roundWithMode(x: Double, mode: TrimType): Double = {
+    if (x < 0) -roundWithMode(-x, mode)
+    else mode match {
+      case Ceiling => math.ceil(x)
+      case Floor => math.floor(x)
+      case Convergent =>
+        // Bankers' rounding: round to nearest even integer on .5
+        val floor = math.floor(x)
+        val frac = x - floor
+        floor + (if (frac > 0.5 || (frac == 0.5 && floor % 2 == 1)) 1 else 0)
+      case Round =>
+        // Round half away from zero (up for positive, down for negative)
+        val floor = math.floor(x)
+        val frac = x - floor
+        if (math.abs(frac) == 0.5) {
+          if (x > 0) floor + 1
+          else floor - 1
+        } else {
+          math.round(x).toDouble
+        }
+    }
   }
 
   def toSignedNBits(x: BigInt, n: Int): BigInt = {
@@ -77,7 +76,7 @@ object Utils {
 
     val w = new BufferedWriter(new FileWriter(file))
     val windowShifted = window.map(
-      c => formatString(doubleToQmn(c, dataType.getWidth - binPointPosition, binPointPosition, Convergent), dataBytes)
+      c => formatString(roundWithMode(c * (1 << binPointPosition), Convergent).toBigInt, dataBytes)
     )
 
     windowShifted.grouped(dataPerWord).foreach { m => w.write(m.mkString + "\n") }

@@ -270,7 +270,7 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
   }
 }
 
-object WindowingAXI4App extends App {
+object AXI4App extends App {
   implicit val p: Parameters = Parameters.empty
 
   private val beatBytes = 4
@@ -308,7 +308,7 @@ object WindowingAXI4App extends App {
   )
 }
 
-object WindowingTLApp extends App {
+object TLApp extends App {
   implicit val p: Parameters = Parameters.empty
 
   private val beatBytes = 4

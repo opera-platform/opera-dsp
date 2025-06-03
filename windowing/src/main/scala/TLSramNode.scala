@@ -1,7 +1,7 @@
 package windowing
 
 import chisel3._
-import chisel3.util.{Cat, RegEnable, log2Ceil}
+import chisel3.util.{Cat, log2Ceil}
 import org.chipsalliance.diplomacy.ValName
 import org.chipsalliance.diplomacy.nodes.SinkNode
 import freechips.rocketchip.diplomacy.{AddressSet, RegionType, TransferSizes}
@@ -16,17 +16,19 @@ case class TLSramNode(
 )(implicit valName: ValName)
   extends SinkNode(TLImp)(Seq(TLSlavePortParameters.v1(
     Seq(TLSlaveParameters.v1(
-      address = List(address),
-      resources = resources,
-      regionType = RegionType.IDEMPOTENT,
-      supportsGet = TransferSizes.none,
+      address            = List(address),
+      resources          = resources,
+      regionType         = RegionType.IDEMPOTENT,
+      supportsGet        = TransferSizes.none,
       supportsPutPartial = TransferSizes(1, beatBytes),
-      supportsPutFull = TransferSizes(1, beatBytes),
+      supportsPutFull    = TransferSizes(1, beatBytes),
       supportsArithmetic = TransferSizes.none,
-      supportsLogical = TransferSizes.none,
-      fifoId = Some(0)).v2copy(name = devName)), // requests are handled in order
+      supportsLogical    = TransferSizes.none,
+      fifoId             = Some(0)
+    ).v2copy(name = devName)), // requests are handled in order
     beatBytes = beatBytes,
-    minLatency = 1)))
+    minLatency = 0)
+  ))
 {
   require (address.contiguous)
 
@@ -35,29 +37,28 @@ case class TLSramNode(
 
   private def mask: List[Boolean] = bigBits(address.mask >> log2Ceil(beatBytes))
 
-  def srammap(sram: SyncReadMem[Vec[UInt]]) = {
+  def srammap(sram: SyncReadMem[Vec[UInt]]): Unit = {
     val (in, edge) = this.in.head
 
-    val w_addr = Cat((mask zip edge.addr_hi(in.a.bits).asBools).filter(_._1).map(_._2).reverse)
+    val addressBits = (mask zip edge.addr_hi(in.a.bits).asBools).filter(_._1).map(_._2)
+    val memAddress = Cat(addressBits.reverse)
+
+    // "Flow control"
+    in.a.ready := in.d.ready
+    in.d.valid := in.a.valid
 
     val hasData = edge.hasData(in.a.bits)
     val wdata = VecInit(Seq.tabulate(1) { i => in.a.bits.data })
 
-    val wen =
-      in.a.valid &&
-      hasData    &&
-      (in.a.bits.opcode === TLMessages.PutFullData || in.a.bits.opcode === TLMessages.PutPartialData)
-
-    // D channel response: always AccessAck for write
-    in.d.valid := RegNext(wen)
-    in.d.bits  := RegEnable(edge.AccessAck(in.a.bits), wen)
-
-    // Write to memory
-    when(wen) {
-      sram.write(w_addr, wdata)
+    in.d.bits.source := in.a.bits.source
+    in.d.bits.size := in.a.bits.size
+    in.d.bits.data := 0.U
+    in.d.bits.corrupt := 0.U
+    in.d.bits.opcode := TLMessages.AccessAck
+    when(in.a.fire && hasData) {
+      sram.write(memAddress, wdata)
     }
 
-    in.a.ready := true.B
     // Tie off unused channels
     in.b.valid := false.B
     in.c.ready := true.B
