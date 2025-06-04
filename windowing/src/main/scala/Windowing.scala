@@ -133,12 +133,6 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
   with HasCSR
   with HasSRAM {
 
-  // The width of the bus must be divisible by the width of the coefficients.
-  assert(
-    (beatBytes*8) % params.coeffType.getWidth == 0,
-    f"Bus width is not divisible by the width of the coefficients."
-  )
-
   // AXI4 stream IN/OUT node
   val streamNode = AXI4StreamIdentityNode()
 
