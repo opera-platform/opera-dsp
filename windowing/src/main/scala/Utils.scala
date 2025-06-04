@@ -9,37 +9,28 @@ import java.io.{BufferedWriter, File, FileWriter}
 import scala.math.BigDecimal.double2bigDecimal
 
 object Utils {
-  def roundTiesToEven(x: Double): Int = {
-    if (x < 0) {
-      // Use symmetry for negative numbers
-      -roundTiesToEven(-x)
-    } else {
-      val intPart = math.floor(x)
-      val fracPart = x - intPart
-      (intPart.toInt +
-        (if (fracPart > 0.5 ||
-          (fracPart == 0.5 && intPart % 2 == 1)) 1 else 0))
-    }
-  }
   def roundWithMode(x: Double, mode: TrimType): Double = {
-    if (x < 0) -roundWithMode(-x, mode)
-    else mode match {
+    mode match {
       case Ceiling => math.ceil(x)
       case Floor => math.floor(x)
       case Convergent =>
-        // Bankers' rounding: round to nearest even integer on .5
-        val floor = math.floor(x)
-        val frac = x - floor
-        floor + (if (frac > 0.5 || (frac == 0.5 && floor % 2 == 1)) 1 else 0)
+        if (x < 0) -roundWithMode(-x, mode) else {
+          // Bankers' rounding: round to nearest even integer on .5
+          val floor = math.floor(x)
+          val frac = x - floor
+          floor + (if (frac > 0.5 || (frac == 0.5 && floor % 2 == 1)) 1 else 0)
+        }
       case Round =>
-        // Round half away from zero (up for positive, down for negative)
-        val floor = math.floor(x)
-        val frac = x - floor
-        if (math.abs(frac) == 0.5) {
-          if (x > 0) floor + 1
-          else floor - 1
-        } else {
-          math.round(x).toDouble
+        if (x < 0) -roundWithMode(-x, mode) else {
+          // Round half away from zero (up for positive, down for negative)
+          val floor = math.floor(x)
+          val frac = x - floor
+          if (math.abs(frac) == 0.5) {
+            if (x > 0) floor + 1
+            else floor - 1
+          } else {
+            math.round(x).toDouble
+          }
         }
     }
   }
