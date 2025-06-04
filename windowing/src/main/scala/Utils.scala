@@ -4,9 +4,13 @@ import chisel3.Data
 import dsptools.TrimType
 import dsptools.numbers.{Ceiling, Convergent, Floor, Round}
 import fixedpoint.FixedPoint
+import freechips.rocketchip.diplomacy.AddressSet
 
 import java.io.{BufferedWriter, File, FileWriter}
 import scala.math.BigDecimal.double2bigDecimal
+import play.api.libs.json.Json
+
+import java.io.FileNotFoundException
 
 object Utils {
   def roundWithMode(x: Double, mode: TrimType): Double = {
@@ -73,4 +77,115 @@ object Utils {
     windowShifted.grouped(dataPerWord).foreach { m => w.write(m.mkString + "\n") }
     w.close()
   }
+}
+
+
+object ParseParameters {
+  def parseconfig(filename: String) = {
+    try {
+      val resource = scala.io.Source.fromFile(filename)
+      val content  = Json.parse(resource.getLines().mkString)
+      // CSR Address
+      val csrAddress = AddressSet(
+        base = BigInt((content \ "csrAddress" \ "base").get.as[String].stripSuffix("L").drop(2), 16),
+        mask = BigInt((content \ "csrAddress" \ "mask").get.as[String].stripSuffix("L").drop(2), 16)
+      )
+      // RAM Address
+      val ramAddress = AddressSet(
+        base = BigInt((content \ "ramAddress" \ "base").get.as[String].stripSuffix("L").drop(2), 16),
+        mask = BigInt((content \ "ramAddress" \ "mask").get.as[String].stripSuffix("L").drop(2), 16)
+      )
+      // Read Parameters
+      val periodic   = (content \ "parameters" \ "periodic"  ).get.as[Boolean]
+      val numPoints  = (content \ "parameters" \ "numPoints" ).get.as[Int]
+      val customFile = (content \ "parameters" \ "customFile").get.as[String]
+      val sigma = (content \ "parameters" \ "sigma").get.as[Double]
+      val parameters = WindowingParams.fixed(
+        numPoints   = numPoints,
+        dataWidth   = (content \ "parameters" \ "dataWidth").get.as[Int],
+        binPoint    = (content \ "parameters" \ "binPoint" ).get.as[Int],
+        constWindow = (content \ "parameters" \ "constWindow").get.as[Boolean],
+        trimType    = {
+          (content \ "parameters" \ "trimType").get.as[String] match {
+            case "Floor"      => Floor
+            case "Ceiling"    => Ceiling
+            case "Convergent" => Convergent
+            case "Round"      => Round
+            case _            => Convergent
+          }
+        },
+        memoryFile = (content \ "parameters" \ "memoryFile").get.as[String],
+        windowFunc = {
+          (content \ "parameters" \ "windowFunc").get.as[String] match {
+            case "TriangularWindow" => TriangularWindow(numPoints, periodic)
+            case "HammingWindow"    => HammingWindow(numPoints, periodic)
+            case "HanningWindow"    => HanningWindow(numPoints, periodic)
+            case "BlackmanWindow"   => BlackmanWindow(numPoints, periodic)
+            case "GaussianWindow"   => GaussianWindow(numPoints, sigma, periodic)
+            case "NoWindow"         => NoWindow()
+            case "CustomWindow"     => CustomWindow(customFile)
+            case _                  => NoWindow()
+          }
+        }
+      )
+      Left((csrAddress, ramAddress, parameters))
+    } catch {
+      case e: FileNotFoundException => throw e
+      case e: Throwable =>
+        Right(throw new Exception(f"Exception occured when parsing configuration file: ${e.getMessage}"))
+    }
+  }
+}
+
+object AppLogger {
+  private sealed abstract class Color
+  private object Red extends Color
+  private object Orange extends Color
+  private object Green extends Color
+  private object Magenta extends Color
+  private val escape = "\u001b[0m"
+
+  private val colorToAnsi = Map(
+    Red -> "\u001b[31m",
+    Orange -> "\u001b[38;5;208m",
+    Green -> "\u001b[32m",
+    Magenta -> "\u001b[35m"
+  )
+
+  private val colorToAnsiBackground = Map(
+    Red -> "\u001b[41;1m",
+    Orange -> "\u001b[48;5;208m",
+    Green -> "\u001b[42;1m",
+    Magenta -> "\u001b[45;1m"
+  )
+
+  private sealed trait LogLevel
+  private case object Error extends LogLevel
+  private case object Warn extends LogLevel
+  private case object Info extends LogLevel
+  private case object Debug extends LogLevel
+
+  private val levelEnv = System.getenv("LOG_LEVEL")
+  private val logLevel = levelEnv match {
+    case "Error" => Error
+    case "Warn"  => Warn
+    case "Debug" => Debug
+    case _       => Info
+  }
+
+  private def isDebugEnabled: Boolean = logLevel == Debug
+  private def isInfoEnabled: Boolean = isDebugEnabled | logLevel == Info
+  private def isWarnEnabled: Boolean = isInfoEnabled | logLevel == Warn
+  private def isErrorEnabled: Boolean = isWarnEnabled | logLevel == Error
+
+  def debug(msg: String): Unit =
+    if (isDebugEnabled) println(s"[DEBUG] $msg")
+  def info(msg: String): Unit =
+    if (isInfoEnabled)
+      println(s"${colorToAnsi(Green)}[INFO] $msg$escape")
+  def warn(msg: String): Unit =
+    if (isWarnEnabled)
+      println(s"${colorToAnsi(Orange)}[WARN] $msg$escape")
+  def error(msg: String): Unit =
+    if (isErrorEnabled) println(s"${colorToAnsi(Red)}[ERROR] $msg$escape")
 }

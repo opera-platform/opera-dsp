@@ -18,6 +18,18 @@ import freechips.rocketchip.tilelink.{TLBundle, TLBundleParameters, TLClientPort
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 
+/**
+ * WindowingAXI4 is AXI4 wrapper for Windowing block.
+ *
+ * @param csrAddress  The address set for control and status register (CSR) accesses.
+ * @param ramAddress  The address set for RAM accesses. Only used if RAM is used instead of ROM.
+ * @param errAddress  Optional sequence of address sets for error reporting. Defaults to empty.
+ * @param params      Windowing parameters.
+ * @param beatBytes   The data bus width in bytes.
+ * @param wcorrupt    Enables or disables write corrupt behavior for AXI4 (default: true).
+ * @tparam T          Data type
+ *
+ */
 class WindowingAXI4[T <: Data: Real: BinaryRepresentation](
   csrAddress: AddressSet,
   ramAddress: AddressSet,
@@ -70,6 +82,17 @@ class WindowingAXI4[T <: Data: Real: BinaryRepresentation](
   override def regmap(mapping: (Int, Seq[RegField])*): Unit = registerNode.get.regmap(mapping: _*)
 }
 
+/**
+ * WindowingTL is TileLink wrapper for Windowing block.
+ *
+ * @param csrAddress  AddressSet for control and status register (CSR) accesses.
+ * @param ramAddress  The address set for RAM accesses. Only used if RAM is used instead of ROM.
+ * @param params      Windowing parameters.
+ * @param beatBytes   Data bus width in bytes.
+ * @param p           Implicit Parameters object for configuration (Chisel context).
+ * @tparam T          Data type.
+ *
+ */
 class WindowingTL[T <: Data: Real: BinaryRepresentation](
   csrAddress: AddressSet,
   ramAddress: AddressSet,
@@ -121,6 +144,22 @@ class WindowingTL[T <: Data: Real: BinaryRepresentation](
   override def regmap(mapping: (Int, Seq[RegField])*): Unit = registerNode.get.regmap(mapping: _*)
 }
 
+/**
+ * Abstract base class for windowing operations on streaming or memory-mapped data.
+ *
+ * This class provides the foundation for implementing windowed DSP operations in hardware.
+ * It supports parameterizable CSR, RAM address space, windowing parameters and data bus width.
+ * This class must be extended by a concrete bus protocol implementation (e.g., AXI4, TileLink).
+ *
+ * @param ramAddress   AddressSet for on-chip RAM (if enabled).
+ * @param params       Windowing parameters.
+ * @param beatBytes    Data bus width in bytes.
+ * @param devName      Optional device name string for hardware generation and metadata.
+ * @param dtsCompat    Optional sequence of device tree compatibility strings.
+ * @param devOverride  Optional device object for register naming and device customization.
+ * @param p            Implicit Chisel Parameters object for context.
+ *
+ */
 abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <: Data](
   ramAddress : AddressSet,
   params     : WindowingParams[T],
@@ -264,26 +303,49 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
   }
 }
 
+/**
+ * AXI4App app sets up parameters for a windowing DSP block connected via AXI4,
+ * instantiates the module, and invokes the Chisel build process to emit SystemVerilog RTL.
+ *
+ * It accepts an optional command-line argument to specify a custom configuration;
+ * otherwise, it uses default parameters and logs this choice.
+ *
+ * Behavior:
+ * - If no command-line arguments are supplied, default AddressSets and parameters are used.
+ * - If an argument is given, it attempts to parse a configuration.
+ * - Logs parameterization steps and errors with `AppLogger`.
+ *
+ * Example usage from command line:
+ *
+ *     $ sbt "project windowing; runMain windowing.AXI4App windowing/src/main/resources/parameters.json"
+ *
+ * @note Output files will be written to ./rtl/WindowingAXI4.
+ */
 object AXI4App extends App {
   implicit val p: Parameters = Parameters.empty
 
   private val beatBytes = 4
-  private val paramsWindowing = WindowingParams.fixed(
-    numPoints   = 1024,
-    dataWidth   = 16,
-    binPoint    = 14,
-    constWindow = false,
-    trimType    = Convergent,
-    memoryFile  = "./rtl/WindowingAXI4/window.txt",
-    windowFunc  = BlackmanWindow(N=1024, periodic = true)
-  )
+  private val blockParams =
+    if (args.length == 0) {
+      AppLogger.warn("No custom configuration was specified.")
+      AppLogger.info("Using default parameters for Windowing block.")
+      (AddressSet(0x010000, 0xff), AddressSet(0x000000, 0x0fff), WindowingParams.fixed())
+    } else {
+      AppLogger.info("Applying custom configuration")
+      ParseParameters.parseconfig(args(0)) match {
+        case Left(x) => x
+        case _ =>
+          AppLogger.error("Something went wrong when acquiring Windowing Parameters")
+          throw new Exception("Invalid configuration")
+      }
+    }
 
   private val windowingModule = LazyModule(
     new WindowingAXI4[FixedPoint](
-      csrAddress = AddressSet(0x010000, 0xff),
-      ramAddress = AddressSet(0x000000, 0x0fff),
+      csrAddress = blockParams._1,
+      ramAddress = blockParams._2,
       errAddress = Nil,
-      params     = paramsWindowing,
+      params     = blockParams._3,
       beatBytes  = beatBytes
     ) with StandaloneAXI4Block {
       override def standaloneParams = AXI4BundleParameters(addrBits = beatBytes*8, dataBits = beatBytes*8, idBits = 1)
@@ -302,37 +364,60 @@ object AXI4App extends App {
   )
 }
 
+/**
+ * TLApp app sets up parameters for a windowing DSP block connected via TileLink,
+ * instantiates the module, and invokes the Chisel build process to emit SystemVerilog RTL.
+ *
+ * It accepts an optional command-line argument to specify a custom configuration;
+ * otherwise, it uses default parameters and logs this choice.
+ *
+ * Behavior:
+ * - If no command-line arguments are supplied, default AddressSets and parameters are used.
+ * - If an argument is given, it attempts to parse a configuration.
+ * - Logs parameterization steps and errors with `AppLogger`.
+ *
+ * Example usage from command line:
+ *
+ *     $ sbt "project windowing; runMain windowing.TLApp windowing/src/main/resources/parameters.json"
+ *
+ * @note Output files will be written to ./rtl/WindowingTL.
+ */
 object TLApp extends App {
   implicit val p: Parameters = Parameters.empty
 
   private val beatBytes = 4
-  private val paramsWindowing = WindowingParams.fixed(
-    numPoints   = 1024,
-    dataWidth   = 16,
-    binPoint    = 14,
-    constWindow = false,
-    trimType    = Convergent,
-    memoryFile  = "",
-    windowFunc  = BlackmanWindow(N=1024, periodic = true)
-  )
+  private val blockParams =
+    if (args.length == 0) {
+      AppLogger.warn("No custom configuration was specified.")
+      AppLogger.info("Using default parameters for Windowing block.")
+      (AddressSet(0x010000, 0xff), AddressSet(0x000000, 0x0fff), WindowingParams.fixed())
+    } else {
+      AppLogger.info("Applying custom configuration")
+      ParseParameters.parseconfig(args(0)) match {
+        case Left(x) => x
+        case _ =>
+          AppLogger.error("Something went wrong when acquiring Windowing Parameters")
+          throw new Exception("Invalid configuration")
+      }
+    }
 
   private val windowingModule = LazyModule(
     new WindowingTL[FixedPoint](
-      csrAddress = AddressSet(0x010000, 0xff),
-      ramAddress = AddressSet(0x000000, 0x0fff),
-      params     = paramsWindowing,
+      csrAddress = blockParams._1,
+      ramAddress = blockParams._2,
+      params     = blockParams._3,
       beatBytes  = beatBytes
     ) with StandaloneTLBlock {
       override def standaloneParams =
         TLBundleParameters(
-          addressBits    = beatBytes*8,
-          dataBits       = beatBytes*8,
-          sourceBits     = 1,
+          addressBits    = beatBytes * 8,
+          dataBits       = beatBytes * 8,
+          sourceBits     = 4,
           sinkBits       = 1,
-          sizeBits       = 1,
-          echoFields     = Seq(),
-          requestFields  = Seq(),
-          responseFields = Seq(),
+          sizeBits       = 2,
+          echoFields     = Nil,
+          requestFields  = Nil,
+          responseFields = Nil,
           hasBCE         = false
         )
       override def dataBytes: Int = 4
