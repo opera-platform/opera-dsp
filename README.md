@@ -1,3 +1,4 @@
+![OPERA-DSP](docs/images/logo.png)
 # OPERA-DSP
 
 The OPERA-DSP project goal is to develop an open-source FMCW radar DSP hardware library, making radar signal processing more accessible to researchers and developers. It (will) provide essential IP cores for FMCW radar signal processing, including windowing functions, Fast Fourier Transform (FFT), magnitude computation, and Constant False Alarm Rate (CFAR) detection. 
