@@ -1,7 +1,7 @@
 package windowing
 
 import chiseltest.{ChiselScalatestTester, TreadleBackendAnnotation, VerilatorBackendAnnotation, WriteVcdAnnotation}
-import dsptools.numbers.Convergent
+import dsptools.numbers.{Ceiling, Convergent, Floor, Round}
 import fixedpoint._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.diplomacy._
@@ -20,7 +20,7 @@ class WindowingAXI4Spec extends AnyFlatSpec with ChiselScalatestTester {
   val random    = true
 
   for (enable <- Seq(false, true)) {
-    for (numPoints <- Seq(32, 128, 256, 1024, 2048)) {
+    for (numPoints <- Seq(32, 256, 2048)) {
       for (window <- Seq(
         TriangularWindow(numPoints, periodic = true),
         HammingWindow(numPoints, periodic = true),
@@ -32,55 +32,61 @@ class WindowingAXI4Spec extends AnyFlatSpec with ChiselScalatestTester {
       )) {
         for (constWindow <- Seq(false, true)) {
           for (runTime <- Seq(false, true)) {
-            // Address
-            val ramAddress = AddressSet(0x60000, numPoints * 4 - 1)
-            val csrAddress = AddressSet(0x60000 + numPoints * 4, 0xF)
-            // Parameters
-            val params = WindowingParams.fixed(
-              numPoints = numPoints,
-              dataWidth = 16,
-              binPoint = 14,
-              runTime = runTime,
-              constWindow = constWindow,
-              trimType = Convergent,
-              memoryFile = s"./test_run_dir/window_$numPoints.txt",
-              windowFunc = window
-            )
-
-            it should "pass when: \n" +
-              s"\t\twindow enabled = $enable,\n" +
-              s"\t\twindow type    = ${window.toString},\n" +
-              s"\t\twindow size    = $numPoints,\n" +
-              s"\t\tconst window   = $constWindow,\n" +
-              s"\t\trun-time       = $runTime,\n" in {
-              val lazyDut = LazyModule(
-                new WindowingAXI4[FixedPoint](
-                  csrAddress = csrAddress,
-                  ramAddress = ramAddress,
-                  errAddress = Nil,
-                  params = params,
-                  beatBytes = beatBytes
-                ) with TestStandaloneAXI4Block {
-                  override def standaloneParams = AXI4BundleParameters(addrBits = beatBytes * 8, dataBits = beatBytes * 8, idBits = 1)
-                  override def dataBytes: Int = 4
-                }
-              )
-
-              test(lazyDut.module)
-                .withAnnotations(annotations)
-                .runPeekPoke(_ =>
-                  new WindowingAXI4Tester(
-                    lazyDut,
-                    csrAddress = csrAddress,
-                    ramAddress = ramAddress,
-                    params = params,
-                    windowFuncRunTime = BlackmanWindow(numPoints / 2, periodic = true),
-                    beatBytes = beatBytes,
-                    enable = enable,
-                    verbose = verbose,
-                    random = random
-                  )
+            for (trimType <- Seq(Floor, Ceiling, Convergent, Round)) {
+              for (binPoint <- Seq(14)) {
+                // Address
+                val ramAddress = AddressSet(0x60000, numPoints * 4 - 1)
+                val csrAddress = AddressSet(0x60000 + numPoints * 4, 0xF)
+                // Parameters
+                val params = WindowingParams.fixed(
+                  numPoints   = numPoints,
+                  dataWidth   = binPoint + 2,
+                  binPoint    = binPoint,
+                  runTime     = runTime,
+                  constWindow = constWindow,
+                  trimType    = trimType,
+                  memoryFile  = s"./test_run_dir/window_$numPoints.txt",
+                  windowFunc  = window
                 )
+
+                it should "pass when: \n" +
+                  s"\t\twindow enabled = $enable,\n" +
+                  s"\t\twindow type    = ${window.toString},\n" +
+                  s"\t\twindow size    = $numPoints,\n" +
+                  s"\t\tconst window   = $constWindow,\n" +
+                  s"\t\trun-time       = $runTime,\n" +
+                  s"\t\ttrim type      = $trimType,\n" in {
+                  val lazyDut = LazyModule(
+                    new WindowingAXI4[FixedPoint](
+                      csrAddress = csrAddress,
+                      ramAddress = ramAddress,
+                      errAddress = Nil,
+                      params = params,
+                      beatBytes = beatBytes
+                    ) with TestStandaloneAXI4Block {
+                      override def standaloneParams = AXI4BundleParameters(addrBits = beatBytes * 8, dataBits = beatBytes * 8, idBits = 1)
+
+                      override def dataBytes: Int = 4
+                    }
+                  )
+
+                  test(lazyDut.module)
+                    .withAnnotations(annotations)
+                    .runPeekPoke(_ =>
+                      new WindowingAXI4Tester(
+                        lazyDut,
+                        csrAddress = csrAddress,
+                        ramAddress = ramAddress,
+                        params = params,
+                        windowFuncRunTime = BlackmanWindow(numPoints / 2, periodic = true),
+                        beatBytes = beatBytes,
+                        enable = enable,
+                        verbose = verbose,
+                        random = random
+                      )
+                    )
+                }
+              }
             }
           }
         }
