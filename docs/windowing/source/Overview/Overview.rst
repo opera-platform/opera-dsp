@@ -19,7 +19,7 @@ Below is a simplified block diagram of the Windowing module.
    :align: center
    :width: 800px
 
-User can chose between ROM (Read Only Memory) to store window coefficients or RAM. If RAM is used, it is connected via Xbar to the bus.
+User can chose between ROM (Read Only Memory) to store window coefficients or RAM (Random Access Memory). If RAM is used, it is connected via Xbar to the bus.
 
 Window Parameters
 ------------------------
