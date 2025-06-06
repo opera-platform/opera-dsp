@@ -10,6 +10,8 @@ project/project
 project/target
 project/build.properties
 target
+# intellij generated files
+.idea
 # Test files
 test_run_dir
 # SV files
