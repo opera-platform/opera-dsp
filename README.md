@@ -155,7 +155,7 @@ $ make test_windowing_all
 
 Test results will be stored in the `./test_run_dir` folder. 
 
-By default 672 tests will be run for both AXI4 and TileLink variants of the Windowing. For each, test will take around 30 minutes. The tests can be found in folder [/windowing/src/test/scala](windowing/src/test/scala). To reduce the number of tests, modify the [WindowingAXI4Spec](windowing/src/test/scala/WindowingAXI4Spec.scala) and/or [WindowingTLSpec](windowing/src/test/scala/WindowingTLSpec.scala) parameters.
+By default 672 tests will be run for both AXI4 and TileLink variants of the Windowing. For each (TileLink or AXI4), tests will take around 30 minutes. The tests can be found in folder [./windowing/src/test/scala/](windowing/src/test/scala). To reduce the number of tests, modify the [WindowingAXI4Spec](windowing/src/test/scala/WindowingAXI4Spec.scala) and/or [WindowingTLSpec](windowing/src/test/scala/WindowingTLSpec.scala) parameters.
 
 ## Log2Magnitude block
 
