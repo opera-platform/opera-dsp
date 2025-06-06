@@ -73,10 +73,6 @@ The PreProcessing block is responsible for formatting raw ADC data from the FMCW
 
 ### Documentation
 
-The PreProcessing block is responsible for formatting raw ADC data from the FMCW radar sensor, ensuring compatibility with the subsequent DSP blocks.
-
-Documentation
-
 For detailed information about the PreProcessing block, including instructions for RTL generation and test execution, refer to the documentation in the [/docs/preprocessing](/docs/preprocessing) folder.
 
 To generate the documentation:
@@ -115,7 +111,51 @@ By default 4,884 tests will be run, and that will take around 2 hours. The tests
 
 ## Windowing block
 
-Work in Progress
+A windowing function is typically used in digital signal
+processing before performing an FFT to reduce spectral leakage that appears in the frequency spectrum.
+
+### Documentation
+
+For detailed information about the Windowing block, including instructions for RTL generation and test execution, refer to the documentation in the [/docs/windowing](/docs/windowing) folder.
+
+To generate the documentation:
+
+```bash
+# For HTML (output in ./docs/windowing/build/html)
+$ make docs_windowing_html
+# For PDF (output in ./docs/windowing/)
+$ make docs_windowing_pdf
+```
+
+### RTL generation
+
+To generate AXI4 or TileLink variants of the Windowing block, use the following commands in the project root directory:
+
+```bash
+# AXI4
+$ make rtl_windowing_axi4
+# TileLink
+$ make rtl_windowing_tl
+```
+
+The generated SystemVerilog code will be located in the `./rtl` folder.
+
+### Tests
+
+To run the Windowing tests, use the following command in the project root directory:
+
+```bash
+# AXI4
+$ make test_windowing_axi4
+# TileLink
+$ make test_windowing_tl
+# For both TileLink and AXI4 tests
+$ make test_windowing_all
+```
+
+Test results will be stored in the `./test_run_dir` folder. 
+
+By default 672 tests will be run for both AXI4 and TileLink variants of the Windowing. For each, test will take around 30 minutes. The tests can be found in folder [/windowing/src/test/scala](windowing/src/test/scala). To reduce the number of tests, modify the [WindowingAXI4Spec](windowing/src/test/scala/WindowingAXI4Spec.scala) and/or [WindowingTLSpec](windowing/src/test/scala/WindowingTLSpec.scala) parameters.
 
 ## Log2Magnitude block
 
