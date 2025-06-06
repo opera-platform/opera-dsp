@@ -12,7 +12,7 @@ Supported window functions can be found here:
 Simplified Block Diagram
 ------------------------
 
-Below is a simplified block diagram of the PreProcessing module.
+Below is a simplified block diagram of the Windowing module.
 
 .. image:: ./images/windowing.png
    :alt: Block diagram of Windowing module
@@ -55,13 +55,13 @@ Window Parameters
   Select window function. Please see :doc:`supported functions. <../Modules/WindowFunctions>`
 
 - ``memoryFile``:  
-  Text file location in which to store coefficients.
+  Text file location in which to store coefficients. Coefficients will be stored in hex format.
 
 - ``constWindow``:  
-  Select between ROM and RAM for coefficient storage. If true, ROM is used.
+  Select between ROM and RAM for coefficient storage. If values is set to `true` ROM is used, else RAM si used to store coefficients. In case that RAM is used to store coefficients, coefficients can be written to the RAM via the bus (AXI4 or TileLink).
 
 - ``trimType``:  
-  Trim type (after multiplication). Supported values are: `Floor`, `Ceiling`, `Convergent` and `Round`.
+  Trim type (after multiplication). Supported values are: `Floor` (round-down), `Ceiling` (round-up), `Convergent` (round half to even) and `Round` (round half towards infinity).
 
 Register Map
 ------------
@@ -79,7 +79,7 @@ The following registers are exposed through the MMIO interface:
 
 - ``chirpsize``: Defines the expected FFT window size.
 
-- ``ctrl``: Contains control bits to enable or disable Windowing block.
+- ``ctrl``: Contains control bits to enable or disable Windowing block. If disabled, input data is just passed to output.
 
 IOs
 ---
@@ -89,7 +89,7 @@ The module includes I/Os provided by the `DspBlock <https://chipyard.readthedocs
 SystemVerilog Generation
 ------------------------
 
-You can generate SystemVerilog from the PreProcessing block using either AXI4 or TL as the memory-mapped control interface.
+You can generate SystemVerilog from the Windowing block using either AXI4 or TL as the memory-mapped control interface.
 
 Use the following commands in the project root folder:
 
@@ -102,7 +102,7 @@ Use the following commands in the project root folder:
 
 This generates SystemVerilog code in the ``./rtl/WindowingAXI4`` folder for the AXI4 variant or ``./rtl/WindowingTL`` for the TileLink variant.
 
-Additionally, you can pass the path to a JSON file containing PreProcessing parameters, for example:
+Additionally, you can pass the path to a JSON file containing Windowing parameters, for example:
 
 .. code-block:: bash
 
@@ -125,11 +125,11 @@ To run tests, use the following command in the project root folder:
    # TileLink Version
    sbt "project windowing; testOnly windowing.WindowingTLSpec"
 
-Output directory is ``./test_run_dir/``.
+Output directory is ``.windowing/test_run_dir/``.
 
 Source Code
 -----------
 
 You can view the source code here:
 
-`PreProcessing.scala on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/windowing/src/main/scala/Windowing.scala>`_
+`Windowing.scala on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/windowing/src/main/scala/Windowing.scala>`_

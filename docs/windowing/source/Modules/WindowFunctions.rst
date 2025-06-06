@@ -1,5 +1,5 @@
-windowing package
-=================
+Supported windowing functions
+=============================
 
 This module provides several windowing functions commonly used in signal processing,
 including Triangular, Hamming, Hanning, Blackman, Gaussian, and custom-defined windows.
@@ -37,13 +37,32 @@ TriangularWindow
 
    **Methods:**
 
+   .. method:: toString
+
+      Returns a string identifier for the window.
+
    .. method:: function
 
       Returns the window values as a sequence.
 
-   .. method:: toString
+      .. code-block:: scala
 
-      Returns a string identifier for the window.
+        val function: Option[Seq[Double]] = Some(
+          if (N == 1) {
+            // Special case: a single value window is just [1.0]
+            Seq(1.0)
+          } else if (periodic) {
+            // Periodic form
+            Seq.tabulate(N) { n =>
+              1 - abs((n.toDouble - N / 2.0) / (N / 2.0))
+            }
+          } else {
+            // Symmetric form
+            Seq.tabulate(N) { n =>
+              1 - abs((n.toDouble - (N - 1) / 2.0) / ((N - 1) / 2.0))
+            }
+          }
+        )
 
 HammingWindow
 -------------
@@ -63,13 +82,33 @@ HammingWindow
 
    **Methods:**
 
+   .. method:: toString
+
+      Returns a string identifier for the window.
+
    .. method:: function
 
       Returns the window values as a sequence.
 
-   .. method:: toString
+      .. code-block:: scala
 
-      Returns a string identifier for the window.
+        val function: Option[Seq[Double]] = Some(
+          if (N == 1) {
+            // Special case: a single value window is just [1.0]
+            Seq(1.0)
+          } else if (periodic) {
+            // Periodic form
+            Seq.tabulate(N) { n =>
+              a0 - a1 * cos(2 * Pi * n.toDouble / N)
+            }
+          } else {
+            // Symmetric form
+            Seq.tabulate(N) { n =>
+              a0 - a1 * cos(2 * Pi * n.toDouble / (N - 1))
+            }
+          }
+        )
+
 
 HanningWindow
 -------------
@@ -85,13 +124,33 @@ HanningWindow
 
    **Methods:**
 
+   .. method:: toString
+
+      Returns a string identifier for the window.
+
    .. method:: function
 
       Returns the window values as a sequence.
 
-   .. method:: toString
+      .. code-block:: scala
 
-      Returns a string identifier for the window.
+        val function: Option[Seq[Double]] = Some(
+          if (N == 1) {
+            // Special case: a single value window is just [1.0]
+            Seq(1.0)
+          } else if (periodic) {
+            // Periodic form
+            Seq.tabulate(N) { n =>
+              0.5 * (1 - cos(2 * Pi * n.toDouble / N))
+            }
+          } else {
+            // Symmetric form
+            Seq.tabulate(N) { n =>
+              0.5 * (1 - cos(2 * Pi * n.toDouble / (N - 1)))
+            }
+          }
+        )
+
 
 BlackmanWindow
 --------------
@@ -112,13 +171,34 @@ BlackmanWindow
 
    **Methods:**
 
+   .. method:: toString
+
+      Returns a string identifier for the window.
+
    .. method:: function
 
       Returns the window values as a sequence.
 
-   .. method:: toString
+      .. code-block:: scala
 
-      Returns a string identifier for the window.
+        val function: Option[Seq[Double]] = Some(
+          if (N == 1) {
+            // Special case: a single value window is just [1.0]
+            Seq(1.0)
+          } else if (periodic) {
+            // Periodic form
+            Seq.tabulate(N) { n =>
+              a0 - a1 * cos(2 * Pi * n.toDouble / N) + a2 * cos(4 * Pi * n.toDouble / N)
+            }
+          } else {
+            // Symmetric form
+            Seq.tabulate(N) { n =>
+              a0 - a1 * cos(2 * Pi * n.toDouble / (N - 1)) + a2 * cos(4 * Pi * n.toDouble / (N - 1))
+            }
+          }
+        )
+
+
 
 GaussianWindow
 --------------
@@ -136,13 +216,35 @@ GaussianWindow
 
    **Methods:**
 
+   .. method:: toString
+
+      Returns a string identifier for the window.
+
    .. method:: function
 
       Returns the window values as a sequence.
 
-   .. method:: toString
+      .. code-block:: scala
 
-      Returns a string identifier for the window.
+        val function: Option[Seq[Double]] = Some(
+          if (N == 1) {
+            // Special case: a single value window is just [1.0]
+            Seq(1.0)
+          } else if (periodic) {
+            Seq.tabulate(N) { n =>
+              val x = (n.toDouble - N / 2.0) / (sigma * N / 2.0)
+              exp(-0.5 * x * x)
+            }
+          } else {
+            // Symmetric form
+            Seq.tabulate(N) { n =>
+              val x = (n - (N - 1) / 2.0) / (sigma * (N - 1) / 2.0)
+              exp(-0.5 * x * x)
+            }
+          }
+        )
+
+
 
 NoWindow
 --------
@@ -169,7 +271,7 @@ CustomWindow
 
    Loads window coefficients from a user-provided text file.
 
-   :param filePath: Path to the file containing window coefficients
+   :param filePath: Path to the file containing window coefficients. Coefficients in file should be stored as real numbers. For example: -2.52, 3.14, 1.0 etc. Each coefficient should be placed on new line.
    :type filePath: String
 
    **Attributes:**
@@ -177,24 +279,29 @@ CustomWindow
    - **N** (*Int*): Length of the window (number of coefficients in the file)
    - **function** (*Option[Seq[Double]]*): Window coefficients read from file
 
+
    **Methods:**
 
    .. method:: toString
 
       Returns a string identifier for the window.
 
-----
+   .. method:: function
 
-Usage Example
--------------
+      Returns the window values as a sequence.
 
-.. code-block:: scala
+    .. code-block:: scala
 
-   import windowing._
+      val function: Option[Seq[Double]] = Some(
+        Using(Source.fromFile(filePath)) { source =>
+          source.getLines()
+            .flatMap(line => Try(line.trim.toDouble).toOption)
+            .toSeq
+        }.getOrElse {
+          println(s"Failed to read file: $filePath.\n")
+          Seq.empty[Double]
+        }
+      )
 
-   val win: WindowType = HammingWindow(N = 128, periodic = false)
-   val coeffs = win.function.get
-
-   println(s"Hamming window of length 128: $coeffs")
 
 

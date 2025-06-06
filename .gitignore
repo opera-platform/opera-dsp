@@ -4,6 +4,7 @@ dependencies
 # Generated documentation
 docs/*/build
 docs/*/preprocessing.pdf
+docs/*/windowing.pdf
 # SBT files
 preprocessing/target
 project/project
