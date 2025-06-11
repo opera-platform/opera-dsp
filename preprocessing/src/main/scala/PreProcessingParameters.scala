@@ -1,4 +1,4 @@
-package preprocessing
+package opera.preprocessing
 
 case class PreProcessingParameters(
   MaxChirpSize: Int = 1024,

@@ -1,10 +1,11 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3.stage.ChiselGeneratorAnnotation
-import chisel3.{Bool, Bundle, IO, Input, when}
 import chisel3.util.Reverse
+import chisel3.{Bool, Bundle, IO, Input, when}
 import circt.stage.{ChiselStage, FirtoolOption}
 import freechips.rocketchip.amba.axi4stream.{AXI4StreamBundle, AXI4StreamIdentityNode}
+import opera.common.{AXI4StreamBlock, StandaloneAXI4StreamBlock}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule.{LazyModule, LazyModuleImp}
 

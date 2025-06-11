@@ -1,8 +1,9 @@
-package preprocessing
+package opera.preprocessing
 
 import chiseltest._
 import dsptools.numbers.implicits._
 import freechips.rocketchip.diplomacy.AddressSet
+import opera.common.TestStandaloneAXI4Block
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,7 +12,7 @@ class PreProcessingSpec extends AnyFlatSpec with ChiselScalatestTester with Test
   behavior of "PreProcessing"
 
   implicit val p: Parameters = Parameters.empty
-  val annotations = Seq(WriteVcdAnnotation, TreadleBackendAnnotation)
+  val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
   val beatBytes = 4
   val silentFail = true

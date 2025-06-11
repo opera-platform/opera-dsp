@@ -1,7 +1,8 @@
-package preprocessing
+package opera.preprocessing
 
 import chiseltest._
 import chiseltest.formal._
+import opera.common.TestAXI4StreamBlock
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +16,7 @@ class PadderSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with
   val silentFail = true
   val verbose = false
 
-  val annotations = Seq(WriteVcdAnnotation, TreadleBackendAnnotation)
+  val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
   for (en <- Seq(false, true)) {
     for (samples <- createSubSequence(1 to maxSamplesPerChirp, 4)) {

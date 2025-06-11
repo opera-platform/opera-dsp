@@ -1,4 +1,4 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
 import chiseltest.iotesters.PeekPokeTester
@@ -6,6 +6,7 @@ import dsptools.numbers.implicits._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
+import opera.common.TestStandaloneAXI4Block
 import org.chipsalliance.diplomacy.lazymodule._
 
 class PreProcessingTester
@@ -159,7 +160,6 @@ class PreProcessingTester
       }
       step(20)
     }
-    stepToCompletion(maxCycles = expectedData.length*8, silentFail = silentFail)
   })
 }
 

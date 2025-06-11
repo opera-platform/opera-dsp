@@ -1,4 +1,4 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
 import chiseltest._
@@ -32,7 +32,7 @@ class CRCSpec extends AnyFlatSpec with ChiselScalatestTester with TestUtils {
           f"\t\treflectIn  = ${params.reflectIn}\n" +
           f"\t\treflectOut = ${params.reflectOut}\n" +
           f"\t\txorOut     = 0x${params.xorOut}%08X\n" in {
-          test(new CRC(params)).withAnnotations(Seq(WriteVcdAnnotation, TreadleBackendAnnotation)) { c =>
+          test(new CRC(params)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { c =>
             val crcValue = crc32(inputBytes, params, 32)
 
             for (i <- input.indices) {

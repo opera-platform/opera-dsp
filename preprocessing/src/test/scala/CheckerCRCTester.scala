@@ -1,9 +1,10 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.numbers.implicits._
 import freechips.rocketchip.amba.axi4stream._
+import opera.common.TestAXI4StreamBlock
 import org.chipsalliance.diplomacy.lazymodule._
 
 class CheckerCRCTester
@@ -130,5 +131,4 @@ class CheckerCRCTester
   }
 
   step(20)
-  stepToCompletion(maxCycles = samplesExpected*8, silentFail = silentFail)
 }

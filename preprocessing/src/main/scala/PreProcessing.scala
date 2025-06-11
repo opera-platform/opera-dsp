@@ -1,16 +1,17 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
-import chisel3.util.log2Ceil
 import chisel3.stage.ChiselGeneratorAnnotation
+import chisel3.util.log2Ceil
 import circt.stage.{ChiselStage, FirtoolOption}
 import dspblocks._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream.AXI4StreamBuffer
-import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.regmapper._
 import freechips.rocketchip.resources._
+import freechips.rocketchip.tilelink._
+import opera.common.{AppLogger, StandaloneAXI4Block, StandaloneTLBlock}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.chipsalliance.diplomacy.nodes._
@@ -160,15 +161,15 @@ object AXI4App extends App {
   implicit val p: Parameters = Parameters.empty
   private val blockParams =
     if (args.length == 0) {
-      DMALogger.warn("No custom configuration was specified.")
-      DMALogger.info("Using default parameters for PreProcessing block.")
+      AppLogger.warn("No custom configuration was specified.")
+      AppLogger.info("Using default parameters for PreProcessing block.")
       (AddressSet(0x500, 0xFF), PreProcessingParameters())
     } else {
-      DMALogger.info("Applying custom configuration")
+      AppLogger.info("Applying custom configuration")
       ParseParameters.parseconfig(args(0)) match {
         case Left(x) => x
         case _ => {
-          DMALogger.error("Something went wrong when acquiring DMA Parameters")
+          AppLogger.error("Something went wrong when acquiring DMA Parameters")
           throw new Exception("Invalid configuration")
         }
       }
@@ -195,15 +196,15 @@ object TLApp extends App {
   implicit val p: Parameters = Parameters.empty
   private val blockParams =
     if (args.length == 0) {
-      DMALogger.warn("No custom configuration was specified.")
-      DMALogger.info("Using default parameters for PreProcessing block.")
+      AppLogger.warn("No custom configuration was specified.")
+      AppLogger.info("Using default parameters for PreProcessing block.")
       (AddressSet(0x500, 0xFF), PreProcessingParameters())
     } else {
-      DMALogger.info("Applying custom configuration")
+      AppLogger.info("Applying custom configuration")
       ParseParameters.parseconfig(args(0)) match {
         case Left(x) => x
         case _ => {
-          DMALogger.error("Something went wrong when acquiring DMA Parameters")
+          AppLogger.error("Something went wrong when acquiring DMA Parameters")
           throw new Exception("Invalid configuration")
         }
       }

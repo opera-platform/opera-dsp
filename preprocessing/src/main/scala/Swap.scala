@@ -1,13 +1,14 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
+import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util.Cat
+import circt.stage.{ChiselStage, FirtoolOption}
 import freechips.rocketchip.amba.axi4stream._
+import opera.common.{AXI4StreamBlock, StandaloneAXI4StreamBlock}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule.{LazyModule, LazyModuleImp}
 import org.chipsalliance.diplomacy.nodes.NodeHandle
-import chisel3.stage.ChiselGeneratorAnnotation
-import circt.stage.{ChiselStage, FirtoolOption}
 
 class SwapIO extends Bundle {
   val i_format: UInt = Input(UInt(2.W))

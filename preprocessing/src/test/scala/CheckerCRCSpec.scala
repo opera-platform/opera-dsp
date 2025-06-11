@@ -1,11 +1,11 @@
-package preprocessing
+package opera.preprocessing
 
 import chiseltest._
 import chiseltest.formal._
+import opera.common.TestAXI4StreamBlock
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.scalatest.flatspec.AnyFlatSpec
-
 
 class CheckerCRCSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
   implicit val p: Parameters = Parameters.empty
@@ -15,7 +15,7 @@ class CheckerCRCSpec extends AnyFlatSpec with ChiselScalatestTester with Formal 
   val silentFail = true
   val verbose = false
 
-  val annotations = Seq(WriteVcdAnnotation, TreadleBackendAnnotation)
+  val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
   for (beatBytes <- Seq(1, 2, 4)) {
     for (init <- Seq(0xFFFFFFFFL, 0x00000000L)) {

@@ -1,4 +1,4 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation

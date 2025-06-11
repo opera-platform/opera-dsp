@@ -1,12 +1,12 @@
-package preprocessing
+package opera.preprocessing
 
 import chisel3._
 import chisel3.util.{Cat, Decoupled}
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.numbers.implicits._
 import freechips.rocketchip.amba.axi4stream._
+import opera.common.{StandaloneAXI4StreamBlock, TestAXI4StreamBlock}
 import org.chipsalliance.diplomacy.lazymodule._
-import org.chipsalliance.diplomacy.bundlebridge.{BundleBridgeSink, BundleBridgeSource}
 
 import scala.util.Random
 
@@ -76,7 +76,6 @@ class SwapTester
     step(1)
   }
   step(20)
-  stepToCompletion(maxCycles = expectedData.length*8, silentFail = silentFail)
 }
 
 

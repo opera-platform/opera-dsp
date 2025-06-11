@@ -2,35 +2,35 @@
 # RTL
 #####################################################
 rtl_preprocessing_axi4:
-	sbt "project preprocessing; runMain preprocessing.AXI4App"
+	sbt "project preprocessing; runMain opera.preprocessing.AXI4App"
 	rm PreProcessingAXI4.sv # Remove generated empty file
 rtl_preprocessing_tl:
-	sbt "project preprocessing; runMain preprocessing.TLApp"
+	sbt "project preprocessing; runMain opera.preprocessing.TLApp"
 	rm PreProcessingTL.sv # Remove generated empty file
 rtl_crc:
-	sbt "project preprocessing; runMain preprocessing.CRCApp"
+	sbt "project preprocessing; runMain opera.preprocessing.CRCApp"
 	rm CRC.sv # Remove generated empty file
 rtl_checkercrc:
-	sbt "project preprocessing; runMain preprocessing.CheckerCRCApp"
+	sbt "project preprocessing; runMain opera.preprocessing.CheckerCRCApp"
 	rm CheckerCRC.sv # Remove generated empty file
 rtl_reverse:
-	sbt "project preprocessing; runMain preprocessing.ReverseApp"
+	sbt "project preprocessing; runMain opera.preprocessing.ReverseApp"
 	rm Reverse.sv # Remove generated empty file
 rtl_swap:
-	sbt "project preprocessing; runMain preprocessing.SwapApp"
+	sbt "project preprocessing; runMain opera.preprocessing.SwapApp"
 	rm Swap.sv # Remove generated empty file
 rtl_padder:
-	sbt "project preprocessing; runMain preprocessing.PadderApp"
+	sbt "project preprocessing; runMain opera.preprocessing.PadderApp"
 	rm Padder.sv # Remove generated empty file
 rtl_preprocessing_all:
 	sbt "project preprocessing; \
-	runMain preprocessing.CRCApp; \
-	runMain preprocessing.CheckerCRCApp; \
-	runMain preprocessing.ReverseApp; \
-	runMain preprocessing.SwapApp; \
-	runMain preprocessing.PadderApp; \
-	runMain preprocessing.AXI4App; \
-	runMain preprocessing.TLApp; \
+	runMain opera.preprocessing.CRCApp; \
+	runMain opera.preprocessing.CheckerCRCApp; \
+	runMain opera.preprocessing.ReverseApp; \
+	runMain opera.preprocessing.SwapApp; \
+	runMain opera.preprocessing.PadderApp; \
+	runMain opera.preprocessing.AXI4App; \
+	runMain opera.preprocessing.TLApp; \
 	"
 	rm PreProcessingAXI4.sv PreProcessingTL.sv CRC.sv CheckerCRC.sv Reverse.sv Swap.sv Padder.sv # Remove generated empty files
 
@@ -38,25 +38,25 @@ rtl_preprocessing_all:
 # Tests
 #####################################################
 test_preprocessing:
-	sbt "project preprocessing; testOnly preprocessing.PreProcessingSpec"
+	sbt "project preprocessing; testOnly opera.preprocessing.PreProcessingSpec"
 test_crc:
-	sbt "project preprocessing; testOnly preprocessing.CRCSpec"
+	sbt "project preprocessing; testOnly opera.preprocessing.CRCSpec"
 test_checkercrc:
-	sbt "project preprocessing; testOnly preprocessing.CheckerCRCSpec"
+	sbt "project preprocessing; testOnly opera.preprocessing.CheckerCRCSpec"
 test_reverse:
-	sbt "project preprocessing; testOnly preprocessing.ReverseSpec"
+	sbt "project preprocessing; testOnly opera.preprocessing.ReverseSpec"
 test_swap:
-	sbt "project preprocessing; testOnly preprocessing.SwapSpec"
+	sbt "project preprocessing; testOnly opera.preprocessing.SwapSpec"
 test_padder:
-	sbt "project preprocessing; testOnly preprocessing.PadderSpec"
+	sbt "project preprocessing; testOnly opera.preprocessing.PadderSpec"
 test_preprocessing_all:
 	sbt "project preprocessing; \
-	testOnly preprocessing.CRCSpec; \
-	testOnly preprocessing.CheckerCRCSpec; \
-	testOnly preprocessing.ReverseSpec; \
-	testOnly preprocessing.SwapSpec; \
-	testOnly preprocessing.PadderSpec; \
-	testOnly preprocessing.PreProcessingSpec; \
+	testOnly opera.preprocessing.CRCSpec; \
+	testOnly opera.preprocessing.CheckerCRCSpec; \
+	testOnly opera.preprocessing.ReverseSpec; \
+	testOnly opera.preprocessing.SwapSpec; \
+	testOnly opera.preprocessing.PadderSpec; \
+	testOnly opera.preprocessing.PreProcessingSpec; \
 	"
 
 #####################################################

@@ -1,4 +1,4 @@
-package preprocessing
+package opera.preprocessing
 
 object Regs {
   val chirpsize     = 0x00
