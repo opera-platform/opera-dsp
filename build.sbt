@@ -166,6 +166,20 @@ lazy val rocket_dsp_utils = freshProject("rocket-dsp-utils", file("./dependencie
   .settings(commonSettings)
 
 
+lazy val common = (project in file("common"))
+  .dependsOn(rocketchip, rocket_dsp_utils)
+  .settings(
+    libraryDependencies ++= rocketLibDeps.value,
+    libraryDependencies ++= Seq("edu.berkeley.cs" %% "chiseltest" % chiselTestVersion),
+    libraryDependencies ++= Seq("com.typesafe.play" %% "play-json" % "2.10.6"),
+    libraryDependencies ++= Seq("org.scalanlp" %% "breeze" % "2.1.0")
+  )
+  .settings(commonSettings)
+  .settings(
+    Test / unmanagedResourceDirectories += baseDirectory.value / "src" / "main" / "resources" / "vsrc",
+    Test / fork := true
+  )
+
 lazy val preprocessing = (project in file("preprocessing"))
   .dependsOn(rocketchip, rocket_dsp_utils)
   .settings(
