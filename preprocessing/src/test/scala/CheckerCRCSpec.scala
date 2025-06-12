@@ -9,11 +9,12 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class CheckerCRCSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
   implicit val p: Parameters = Parameters.empty
-  val maxSamples = 256
+
+  val maxSamples      = 256
   val samplesExpected = 128
-  val dataRandom = true
-  val silentFail = true
-  val verbose = false
+  val dataRandom      = true
+  val random          = true
+  val verbose         = false
 
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
@@ -45,7 +46,7 @@ class CheckerCRCSpec extends AnyFlatSpec with ChiselScalatestTester with Formal 
               test(lazyDut.module)
                 .withAnnotations(annotations)
                 .runPeekPoke(
-                  _ => new CheckerCRCTester(lazyDut, en, samplesExpected, params, dataRandom, silentFail, verbose)
+                  _ => new CheckerCRCTester(lazyDut, en, samplesExpected, params, dataRandom, random, verbose)
                 )
             }
           }

@@ -9,12 +9,13 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class PadderSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption with TestUtils {
   implicit val p: Parameters = Parameters.empty
-  val beatBytes = 4
+
+  val beatBytes           = 4
   val maxSamplesPerChirp = 16
-  val maxChirpsPerFrame = 4
-  val dataRandom = true
-  val silentFail = true
-  val verbose = false
+  val maxChirpsPerFrame  = 4
+  val dataRandom         = true
+  val random             = true
+  val verbose            = false
 
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
@@ -34,7 +35,7 @@ class PadderSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with
             test(lazyDut.module)
               .withAnnotations(annotations)
               .runPeekPoke(
-                _ => new PadderTester(lazyDut, en, samples, samplesExpected, chirps, dataRandom, beatBytes, silentFail, verbose)
+                _ => new PadderTester(lazyDut, en, samples, samplesExpected, chirps, dataRandom, beatBytes, random, verbose)
               )
           }
 

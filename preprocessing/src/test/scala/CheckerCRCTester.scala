@@ -9,14 +9,14 @@ import org.chipsalliance.diplomacy.lazymodule._
 
 class CheckerCRCTester
 (
-  dut: CheckerCRC with TestAXI4StreamBlock,
-  en: Boolean = true,
+  dut            : CheckerCRC with TestAXI4StreamBlock,
+  en             : Boolean = true,
   samplesExpected: Int,
-  params: CRCParameters,
-  dataRandom: Boolean = false,
-  silentFail: Boolean = false,
-  verbose: Boolean = false
-) extends PeekPokeTester(dut.module) with AXI4StreamModel[LazyModuleImp] with TestUtils {
+  params         : CRCParameters,
+  dataRandom     : Boolean = false,
+  random         : Boolean = false,
+  verbose        : Boolean = false
+) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with TestUtils {
 
   if (verbose) {
     print(f"\n#################################################\n")
@@ -36,11 +36,11 @@ class CheckerCRCTester
 
   val mod: LazyModuleImp = dut.module
   // Bind nodes
-  val inMaster: AXI4StreamPeekPokeMaster = bindMaster(dut.in.getWrappedValue)
+  val inMaster: AXI4StreamRandomPeekPokeMaster = bindMaster(dut.in.getWrappedValue, random = random)
 
   // Reset stream nodes
   resetMaster(dut.in)
-  resetSlave(dut.out)
+  poke(dut.out.ready, false.B)
   step(1)
   poke(dut.io.i_en, en)
   poke(dut.io.i_samples_expected, samplesExpected.U)
@@ -74,9 +74,8 @@ class CheckerCRCTester
 
   // Check output data
   while (read_counter < inData.length && write_counter <= inDataWithCRC.length) {
-    // Randomize ready and valid
-    poke(dut.in.valid,  scala.util.Random.nextInt(2))
-    poke(dut.out.ready, scala.util.Random.nextInt(2))
+    // Randomize ready
+    if (random) poke(dut.out.ready, scala.util.Random.nextInt(2))
 
     // Keep track of written data
     if (peek(dut.in.ready) === BigInt(1) && peek(dut.in.valid) === BigInt(1)) {

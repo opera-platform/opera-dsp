@@ -9,11 +9,12 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class SwapSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
   implicit val p: Parameters = Parameters.empty
-  val beatBytes = 4
-  val dataSize = 256
+
+  val beatBytes  = 4
+  val dataSize   = 256
   val dataRandom = true
-  val silentFail = true
-  val verbose = false
+  val random     = true
+  val verbose    = false
 
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
@@ -27,7 +28,7 @@ class SwapSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with F
         test(lazyDut.module)
           .withAnnotations(annotations)
           .runPeekPoke(
-            _ => new SwapTester(lazyDut, en, format, dataSize, dataRandom, beatBytes, silentFail, verbose)
+            _ => new SwapTester(lazyDut, en, format, dataSize, dataRandom, beatBytes, random, verbose)
           )
       }
 

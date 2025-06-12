@@ -81,7 +81,7 @@ class CheckerCRC(val params: CRCParameters, val samplesBeforeCRC: Int) extends L
     io.o_crc := crc.io.o_crc
     crc.io.i_en := r_counter < io.i_samples_expected && in.fire
     crc.io.i_data := in.bits.data
-    crc.io.i_done := r_counter === io.i_samples_expected + (cyclesForCRC - 1).U
+    crc.io.i_done := io.o_crc_valid
 
     // Connect input and output
     out.bits := in.bits

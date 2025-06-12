@@ -10,14 +10,14 @@ import org.chipsalliance.diplomacy.lazymodule._
 
 class ReverseTester
 (
-  dut: Reverse with TestAXI4StreamBlock,
-  en: Boolean = true,
-  dataSize: Int,
+  dut       : Reverse with TestAXI4StreamBlock,
+  en        : Boolean = true,
+  dataSize  : Int,
   dataRandom: Boolean = false,
-  beatBytes: Int,
-  silentFail: Boolean = false,
-  verbose: Boolean = false
-) extends PeekPokeTester(dut.module) with AXI4StreamModel[LazyModuleImp] with TestUtils {
+  beatBytes : Int,
+  random    : Boolean,
+  verbose   : Boolean = false
+) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with TestUtils {
 
   if (verbose) {
     print(f"\n###################################\n")
@@ -31,11 +31,11 @@ class ReverseTester
 
   val mod: LazyModuleImp = dut.module
   // Bind nodes
-  val inMaster: AXI4StreamPeekPokeMaster = bindMaster(dut.in.getWrappedValue)
+  val inMaster: AXI4StreamRandomPeekPokeMaster = bindMaster(dut.in.getWrappedValue, random)
 
   // Reset stream nodes
   resetMaster(dut.in)
-  resetSlave(dut.out)
+  poke(dut.out.ready, false.B)
   poke(dut.io.i_en, en)
   step(1)
 
@@ -53,9 +53,8 @@ class ReverseTester
   var counter = 0
   var peekedValue: BigInt = 0
   while (counter < expectedData.length) {
-    // Randomize ready and valid
-    poke(dut.in.valid,  scala.util.Random.nextInt(2))
-    poke(dut.out.ready, scala.util.Random.nextInt(2))
+    // Randomize ready
+    if (random) poke(dut.out.ready, scala.util.Random.nextInt(2))
     if (peek(dut.out.ready) === BigInt(1) && peek(dut.out.valid) === BigInt(1)) {
       peekedValue = peek(dut.out.bits.data)
       if(verbose) {

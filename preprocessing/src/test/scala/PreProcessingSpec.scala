@@ -14,10 +14,10 @@ class PreProcessingSpec extends AnyFlatSpec with ChiselScalatestTester with Test
   implicit val p: Parameters = Parameters.empty
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
-  val beatBytes = 4
-  val silentFail = true
-  val verbose = false
-  val address = AddressSet(0x2000, 0xFF)
+  val beatBytes  = 4
+  val verbose    = false
+  val random     = true
+  val address    = AddressSet(0x2000, 0xFF)
 
   val params = PreProcessingParameters(
     MaxChirpSize = 256,
@@ -66,7 +66,7 @@ class PreProcessingSpec extends AnyFlatSpec with ChiselScalatestTester with Test
               test(lazyDut.module)
                 .withAnnotations(annotations)
                 .runPeekPoke(
-                  _ => new PreProcessingTester(lazyDut, address, params, configuration, beatBytes, silentFail, verbose)
+                  _ => new PreProcessingTester(lazyDut, address, params, configuration, beatBytes, verbose, random)
                 )
             }
           }

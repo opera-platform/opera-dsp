@@ -11,14 +11,14 @@ import org.chipsalliance.diplomacy.lazymodule._
 
 class PreProcessingTester
 (
-  dut: PreProcessingAXI4 with TestStandaloneAXI4Block,
-  address: AddressSet,
-  params : PreProcessingParameters,
-  config: TestConfiguration,
-  beatBytes : Int,
-  silentFail: Boolean = false,
-  verbose: Boolean = false
-) extends PeekPokeTester(dut.module) with AXI4StreamModel[LazyModuleImp] with AXI4MasterModel with TestUtils {
+  dut      : PreProcessingAXI4 with TestStandaloneAXI4Block,
+  address  : AddressSet,
+  params   : PreProcessingParameters,
+  config   : TestConfiguration,
+  beatBytes: Int,
+  verbose  : Boolean = false,
+  random   : Boolean
+) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with AXI4MasterModel with TestUtils {
 
   if (verbose) {
     print(
@@ -43,7 +43,7 @@ class PreProcessingTester
   val mod: LazyModuleImp = dut.module
   // Bind nodes
   def memAXI: AXI4Bundle = dut.ioMem.get
-  val inMaster: AXI4StreamPeekPokeMaster = bindMaster(dut.in.getWrappedValue)
+  val inMaster: AXI4StreamRandomPeekPokeMaster = bindMaster(dut.in.getWrappedValue, random = random)
 
   config.regs.foreach(regs => {
     // Check configuration and parameters
@@ -62,7 +62,7 @@ class PreProcessingTester
 
     // Reset stream nodes
     resetMaster(dut.in)
-    resetSlave(dut.out)
+    poke(dut.out.ready, false.B)
     poke(dut.io.i_crc_data, false.B)
     step(1)
     // Write to memory
@@ -119,9 +119,8 @@ class PreProcessingTester
       var peekedValue: BigInt = 0
       val expectedChirpSize = expectedData.length / regs.chirpperframe
       while (counter < expectedChirpSize) {
-        // Randomize ready and valid
-        poke(dut.in.valid,  scala.util.Random.nextInt(2))
-        poke(dut.out.ready, scala.util.Random.nextInt(2))
+        // Randomize ready
+        if (random) poke(dut.out.ready, scala.util.Random.nextInt(2))
         // Check output data
         if (peek(dut.out.ready) === BigInt(1) && peek(dut.out.valid) === BigInt(1)) {
           peekedValue = peek(dut.out.bits.data)
@@ -137,7 +136,7 @@ class PreProcessingTester
         }
         step(1)
       }
-      step(1)
+      step(20)
       // Check CRC result
       if ((regs.ctrl & 0x1) == 1) {
         val peekedCRC = memReadWord(address.base + Regs.crcvalue)
@@ -149,7 +148,7 @@ class PreProcessingTester
           print(f"peeked CRC error: $peekedCRCStatus, ")
           print(f"expected CRC error: 0.\n")
         }
-        assert(
+        require(
           peekedCRC == crcValue,
           f"Read CRC value: 0x$peekedCRC%08X, but should be: 0x$crcValue%08X\n"
         )

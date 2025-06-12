@@ -9,11 +9,12 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class ReverseSpec extends AnyFlatSpec with ChiselScalatestTester with Formal with FormalBackendOption {
   implicit val p: Parameters = Parameters.empty
-  val beatBytes = 2
-  val dataSize = 128
+
+  val beatBytes  = 2
+  val dataSize   = 128
   val dataRandom = true
-  val silentFail = true
-  val verbose = false
+  val random     = true
+  val verbose    = false
 
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
@@ -26,7 +27,7 @@ class ReverseSpec extends AnyFlatSpec with ChiselScalatestTester with Formal wit
       test(lazyDut.module)
         .withAnnotations(annotations)
         .runPeekPoke(
-          _ => new ReverseTester(lazyDut, en, dataSize, dataRandom, beatBytes, silentFail, verbose)
+          _ => new ReverseTester(lazyDut, en, dataSize, dataRandom, beatBytes, random, verbose)
         )
     }
 
