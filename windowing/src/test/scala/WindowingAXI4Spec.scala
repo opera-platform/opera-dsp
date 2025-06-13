@@ -1,10 +1,11 @@
-package windowing
+package opera.windowing
 
-import chiseltest.{ChiselScalatestTester, TreadleBackendAnnotation, VerilatorBackendAnnotation, WriteVcdAnnotation}
+import chiseltest.{ChiselScalatestTester, VerilatorBackendAnnotation, WriteVcdAnnotation}
 import dsptools.numbers.{Ceiling, Convergent, Floor, Round}
 import fixedpoint._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.diplomacy._
+import opera.common.TestStandaloneAXI4Block
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule.LazyModule
 import org.scalatest.flatspec.AnyFlatSpec

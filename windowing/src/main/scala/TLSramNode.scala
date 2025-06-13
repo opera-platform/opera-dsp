@@ -1,12 +1,12 @@
-package windowing
+package opera.windowing
 
 import chisel3._
 import chisel3.util.{Cat, log2Ceil}
-import org.chipsalliance.diplomacy.ValName
-import org.chipsalliance.diplomacy.nodes.SinkNode
 import freechips.rocketchip.diplomacy.{AddressSet, RegionType, TransferSizes}
 import freechips.rocketchip.resources._
 import freechips.rocketchip.tilelink._
+import org.chipsalliance.diplomacy.ValName
+import org.chipsalliance.diplomacy.nodes.SinkNode
 
 case class TLSramNode(
   address: AddressSet,

@@ -1,4 +1,4 @@
-package windowing
+package opera.windowing
 
 import breeze.math.Complex
 import chisel3._
@@ -8,7 +8,9 @@ import fixedpoint._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
+import opera.common.{ArithmeticUtils, TestStandaloneAXI4Block, TestUtils}
 import org.chipsalliance.diplomacy.lazymodule.LazyModuleImp
+
 import scala.math.BigDecimal.double2bigDecimal
 
 class WindowingAXI4Tester(
@@ -78,26 +80,26 @@ class WindowingAXI4Tester(
   val expectedData: Seq[(BigInt, BigInt)] = if (window.isDefined & params.windowFunc.function.isDefined & enable)
     inDataComplex.zip(window.get).map {
       case (data, coefficient) =>
-        val real = Utils.toSignedNBits(data >> (dataWidth / 2), dataWidth / 2)
-        val imag = Utils.toSignedNBits(data & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
-        val coef = Utils.roundWithMode(coefficient * (1 << winBinPoint), Convergent)
+        val real = ArithmeticUtils.toSignedNBits(data >> (dataWidth / 2), dataWidth / 2)
+        val imag = ArithmeticUtils.toSignedNBits(data & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
+        val coef = ArithmeticUtils.roundWithMode(coefficient * (1 << winBinPoint), Convergent)
         val tmpReal = real.toDouble * coef / scala.math.pow(2, winBinPoint)
         val tmpImag = imag.toDouble * coef / scala.math.pow(2, winBinPoint)
-        val outReal = Utils.roundWithMode(tmpReal, params.trimType).toInt
-        val outImag = Utils.roundWithMode(tmpImag, params.trimType).toInt
+        val outReal = ArithmeticUtils.roundWithMode(tmpReal, params.trimType).toInt
+        val outImag = ArithmeticUtils.roundWithMode(tmpImag, params.trimType).toInt
         (outReal, outImag)
     }
   else inData.map {
     data =>
-      val real = Utils.toSignedNBits(data.real.toInt, dataWidth / 2)
-      val imag = Utils.toSignedNBits(data.imag.toInt, dataWidth / 2)
+      val real = ArithmeticUtils.toSignedNBits(data.real.toInt, dataWidth / 2)
+      val imag = ArithmeticUtils.toSignedNBits(data.imag.toInt, dataWidth / 2)
       (real, imag)
   }
 
   // If run-time is enabled and RAM is used to store coefficients, write function coefficients to memory
   if (params.runTime & window.isDefined & !params.constWindow & params.windowFunc.function.isDefined) {
     window.get.zipWithIndex.foreach{ case (m, i) =>
-      val coefficient = Utils.roundWithMode(m * (1 << winBinPoint), Convergent).toBigInt
+      val coefficient = ArithmeticUtils.roundWithMode(m * (1 << winBinPoint), Convergent).toBigInt
       memWriteWord(ramAddress.base + beatBytes * i, coefficient)
     }
     step(10)
@@ -132,13 +134,13 @@ class WindowingAXI4Tester(
     // Check output data
     if (peek(dut.out.valid) == 1 && peek(dut.out.ready) == 1) {
       peekedValue = peek(dut.out.bits.data)
-      val real = Utils.toSignedNBits(peekedValue >> (dataWidth / 2), dataWidth / 2)
-      val imag = Utils.toSignedNBits(peekedValue & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
+      val real = ArithmeticUtils.toSignedNBits(peekedValue >> (dataWidth / 2), dataWidth / 2)
+      val imag = ArithmeticUtils.toSignedNBits(peekedValue & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
       // Print if enabled
       if (verbose & window.isDefined) {
-        val in_real = Utils.toSignedNBits(inDataComplex(counter) >> (dataWidth / 2), dataWidth / 2)
-        val in_imag = Utils.toSignedNBits(inDataComplex(counter) & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
-        val coef = Utils.roundWithMode(window.get(counter) * (1 << winBinPoint), Convergent).toBigInt
+        val in_real = ArithmeticUtils.toSignedNBits(inDataComplex(counter) >> (dataWidth / 2), dataWidth / 2)
+        val in_imag = ArithmeticUtils.toSignedNBits(inDataComplex(counter) & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
+        val coef = ArithmeticUtils.roundWithMode(window.get(counter) * (1 << winBinPoint), Convergent).toBigInt
         print(f"i: 0x$counter%04X, ")
         print(f"input: $in_real%6d + $in_imag%6dj, coefficient: $coef%6d, ")
         print(f"peeked data: $real%6d + $imag%6dj, ")

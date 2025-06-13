@@ -1,4 +1,4 @@
-package windowing
+package opera.windowing
 
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
@@ -15,6 +15,7 @@ import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.regmapper._
 import freechips.rocketchip.resources.{Device, DeviceRegName, DiplomaticSRAM, SimpleDevice}
 import freechips.rocketchip.tilelink.{TLBundle, TLBundleParameters, TLClientPortParameters, TLEdgeIn, TLEdgeOut, TLIdentityNode, TLManagerPortParameters, TLRegisterNode, TLXbar}
+import opera.common.{AppLogger, StandaloneAXI4Block, StandaloneTLBlock}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 

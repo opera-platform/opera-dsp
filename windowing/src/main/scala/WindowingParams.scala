@@ -1,9 +1,9 @@
-package windowing
+package opera.windowing
 
 import chisel3._
-import fixedpoint._
 import dsptools._
 import dsptools.numbers._
+import fixedpoint._
 
 case class WindowingParams[T <: Data](
   dataType   : DspComplex[T], // Input data type

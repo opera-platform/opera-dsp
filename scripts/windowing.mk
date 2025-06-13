@@ -2,15 +2,15 @@
 # RTL
 #####################################################
 rtl_windowing_axi4:
-	sbt "project windowing; runMain windowing.AXI4App"
+	sbt "project windowing; runMain opera.windowing.AXI4App"
 	rm WindowingAXI4.sv # Remove generated empty file
 rtl_windowing_tl:
-	sbt "project windowing; runMain windowing.TLApp"
+	sbt "project windowing; runMain opera.windowing.TLApp"
 	rm WindowingTL.sv # Remove generated empty file
 rtl_windowing_all:
 	sbt "project windowing; \
-	runMain windowing.AXI4App; \
-	runMain windowing.TLApp; \
+	runMain opera.windowing.AXI4App; \
+	runMain opera.windowing.TLApp; \
 	"
 	rm WindowingAXI4.sv WindowingTL.sv # Remove generated empty files
 
@@ -18,13 +18,13 @@ rtl_windowing_all:
 # Tests
 #####################################################
 test_windowing_axi4:
-	sbt "project windowing; testOnly windowing.WindowingAXI4Spec"
+	sbt "project windowing; testOnly opera.windowing.WindowingAXI4Spec"
 test_windowing_tl:
-	sbt "project windowing; testOnly windowing.WindowingTLSpec"
+	sbt "project windowing; testOnly opera.windowing.WindowingTLSpec"
 test_windowing_all:
 	sbt "project windowing; \
-	testOnly windowing.WindowingAXI4Spec; \
-	testOnly windowing.WindowingTLSpec; \
+	testOnly opera.windowing.WindowingAXI4Spec; \
+	testOnly opera.windowing.WindowingTLSpec; \
 	"
 
 #####################################################

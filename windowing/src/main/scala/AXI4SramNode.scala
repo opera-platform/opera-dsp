@@ -1,14 +1,14 @@
-package windowing
+package opera.windowing
 
 import chisel3._
 import chisel3.util.{Cat, log2Ceil}
 import freechips.rocketchip.amba.AMBACorrupt
 import freechips.rocketchip.amba.axi4._
+import freechips.rocketchip.diplomacy.{AddressSet, RegionType, TransferSizes}
+import freechips.rocketchip.resources._
+import freechips.rocketchip.util._
 import org.chipsalliance.diplomacy.ValName
 import org.chipsalliance.diplomacy.nodes.SinkNode
-import freechips.rocketchip.diplomacy.{AddressSet, RegionType, TransferSizes}
-import freechips.rocketchip.util._
-import freechips.rocketchip.resources._
 
 case class AXI4SramNode(
  address: AddressSet,

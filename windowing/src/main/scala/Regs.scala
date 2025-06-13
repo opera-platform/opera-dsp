@@ -1,4 +1,4 @@
-package windowing
+package opera.windowing
 
 object Regs {
   def apply(beatBytes: Int): Regs = {

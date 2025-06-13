@@ -1,8 +1,9 @@
-package windowing
+package opera.windowing
 
 import breeze.numerics.cos
-import scala.math.{abs, exp, Pi}
+
 import scala.io.Source
+import scala.math.{Pi, abs, exp}
 import scala.util.{Try, Using}
 
 sealed trait WindowType {
