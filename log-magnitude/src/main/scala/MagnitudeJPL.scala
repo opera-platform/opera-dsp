@@ -45,10 +45,16 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   io.out.bits  := A
   io.out.valid := io.in.valid
   io.in.ready  := io.out.ready
+
+  val w_out = Wire(io.out.cloneType)
+  w_out.bits  := A
+  w_out.valid := io.in.valid
+  io.in.ready := w_out.ready
+  AlignHandshake(2*params.addPipeRegs, w_out, io.out) := A
 }
 
 
-object CRCApp extends App {
+object MagnitudeJPLApp extends App {
   val params = LogMagnitudeParams[FixedPoint](
     inputType    = DspComplex(FixedPoint(16.W, 14.BP)),
     outputType   = FixedPoint(16.W, 14.BP),
