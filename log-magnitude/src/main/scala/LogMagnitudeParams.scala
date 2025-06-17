@@ -7,6 +7,7 @@ import dsptools.numbers.DspComplex
 sealed trait MagType
 
 case object JPL extends MagType
+case object LogJPL extends MagType
 
 // LogMagnitude Parameters
 case class LogMagnitudeParams[T <: Data](

@@ -38,13 +38,8 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   // A= 7/8 * X + 1/2 * Y;  X <= 3Y
   val leA = DspContext.withNumAddPipes(params.addPipeRegs) {
     x_7_8.context_+(ShiftRegister(BinaryRepresentation[T].shr(y, 1), params.addPipeRegs, true.B))
-  } // (7/8)*U + 1/2*V
+  }
   private val A = Real[T].max(geA, leA)
-
-  // Connect output
-  io.out.bits  := A
-  io.out.valid := io.in.valid
-  io.in.ready  := io.out.ready
 
   val w_out = Wire(io.out.cloneType)
   w_out.bits  := A
