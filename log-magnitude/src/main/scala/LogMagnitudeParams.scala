@@ -8,6 +8,7 @@ sealed trait MagType
 
 case object JPL extends MagType
 case object LogJPL extends MagType
+case object Squared extends MagType
 
 // LogMagnitude Parameters
 case class LogMagnitudeParams[T <: Data](
