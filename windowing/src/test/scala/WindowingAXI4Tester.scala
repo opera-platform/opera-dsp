@@ -8,7 +8,7 @@ import fixedpoint._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
-import opera.common.{ArithmeticUtils, TestStandaloneAXI4Block, TestUtils}
+import opera.common.{ArithmeticUtils, TestStandaloneAXI4Block, SignalUtils}
 import org.chipsalliance.diplomacy.lazymodule.LazyModuleImp
 
 import scala.math.BigDecimal.double2bigDecimal
@@ -24,7 +24,7 @@ class WindowingAXI4Tester(
   enable           : Boolean = true,
   verbose          : Boolean = true,
   random           : Boolean = true
-) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with AXI4MasterModel with TestUtils {
+) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with AXI4MasterModel with SignalUtils {
 
   if (verbose) {
     print(f"\n#####################################\n")

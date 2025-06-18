@@ -8,7 +8,7 @@ import fixedpoint._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.tilelink.{TLBundle, TLMasterModel}
-import opera.common.{ArithmeticUtils, TestStandaloneTLBlock, TestUtils}
+import opera.common.{ArithmeticUtils, TestStandaloneTLBlock, SignalUtils}
 import org.chipsalliance.diplomacy.lazymodule.LazyModuleImp
 
 import scala.math.BigDecimal.double2bigDecimal
@@ -24,7 +24,7 @@ class WindowingTLTester(
   enable           : Boolean = true,
   verbose          : Boolean = true,
   random           : Boolean = true
-) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with TLMasterModel with TestUtils {
+) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with TLMasterModel with SignalUtils {
 
   if (verbose) {
     print(f"\n#####################################\n")

@@ -5,7 +5,7 @@ import breeze.math.Complex
 import scala.math.BigDecimal.long2bigDecimal
 import scala.util.Random
 
-trait TestUtils {
+trait SignalUtils {
 
   // Generates complex or real sinusoid with optional added noise
   def generateSignal(
