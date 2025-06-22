@@ -2,39 +2,32 @@ package opera.logmagnitude
 
 import chisel3._
 import chisel3.experimental.requireIsHardware
-import chisel3.util.{DecoupledIO, Queue, ShiftRegister, log2Ceil}
 
 object AlignHandshake {
-  def apply[T <: Data](latency: Int, in: DecoupledIO[_ <: Data], out: DecoupledIO[T], en: Bool = true.B): T = {
-    // Input and Output must be hardware types
-    requireIsHardware(in)
-    requireIsHardware(out)
-    // Latency cannot be negative
-    require(latency >= 0)
+  def apply[T <: Data](latency: Int, i_valid: Bool, o_ready: Bool): (Vec[Bool], Vec[Bool]) = {
+    // i_valid and o_ready must be hardware
+    requireIsHardware(i_valid)
+    requireIsHardware(o_ready)
+    // Latency must be larger than 0
+    require(latency > 0)
 
-    // If there is no latency, just connect input/output ready and valid signals
-    if (latency == 0) {
-      in.ready  := out.ready
-      out.valid := in.valid
+    val w_en = Wire(Vec(latency, Bool()))
+    val r_valid = RegInit(VecInit(Seq.fill(latency)(false.B)))
 
-      return out.bits
+    for (i <- 0 until latency) {
+      when(w_en(i)) {
+        if (i == 0)
+          r_valid(i) := i_valid
+        else
+          r_valid(i) := r_valid(i - 1)
+      }
+
+      if (i == latency - 1)
+        w_en(i) := o_ready || !r_valid(i)
+      else
+        w_en(i) := w_en(i + 1) || !r_valid(i)
     }
-    
-    val updatedLatency = if (latency % 2 == 0) latency + 1 else latency
 
-    val queue = Module(new Queue(chiselTypeOf(out.bits), updatedLatency + 1, pipe = updatedLatency == 1))
-    val r_counter = RegInit(0.U(log2Ceil(latency + 1).W))
-    r_counter := r_counter +& in.fire -& out.fire
-    
-    queue.io.enq.valid := ShiftRegister(in.fire, latency, false.B, en)
-    assert(!queue.io.enq.valid || queue.io.enq.ready) // we control in.ready such that the queue can't fill up!
-
-    in.ready := (r_counter < updatedLatency.U) //|| (r_counter === updatedLatency.U && out.ready)
-    queue.io.deq.ready := out.ready
-    out.valid := queue.io.deq.valid
-    out.bits := queue.io.deq.bits
-
-    // Return
-    queue.io.enq.bits
+    (w_en, r_valid)
   }
 }

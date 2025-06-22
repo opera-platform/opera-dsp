@@ -7,6 +7,7 @@ import chiseltest.iotesters.PeekPokeTester
 import dsptools.numbers.{Convergent, DspComplex}
 import fixedpoint._
 import opera.common.{ArithmeticUtils, SignalUtils}
+import org.chipsalliance.diplomacy.lazymodule.InModuleBody
 
 import scala.math.BigDecimal.double2bigDecimal
 
@@ -57,6 +58,7 @@ class MagnitudeTester(
   }
 
   // Reset DeCoupled nodes
+  step(1)
   poke(dut.io.in.valid , false.B)
   poke(dut.io.out.ready, false.B)
   step(1)
@@ -84,21 +86,23 @@ class MagnitudeTester(
     // Check output data
     if (peek(dut.io.out.valid) == 1 && peek(dut.io.out.ready) == 1) {
       peekedValue = peek(dut.io.out.bits).head
+      // Expected value
+      val expected = expectedData(read_counter)
 
       // Print if enabled
       if (verbose) {
         val in_real = inDataComplex(read_counter)._1
-        val in_imag =inDataComplex(read_counter)._2
+        val in_imag = inDataComplex(read_counter)._2
         print(f"i: 0x$read_counter%04X, ")
         print(f"input: $in_real%6d + $in_imag%6dj, ")
-        print(f"peeked data: ${peekedValue}%6d, ")
-        print(f"expected data: ${expectedData(read_counter)}%6d.\n")
+        print(f"peeked data: $peekedValue%6d, ")
+        print(f"expected data: $expected%6d.\n")
       }
       // Check results
       require(
-        expectedData(read_counter) == peekedValue,
+        expected == peekedValue,
         f"[0x$read_counter%04X] Expected and received data are different.\n" +
-          f"\texpected: ${expectedData(read_counter)}, " +
+          f"\texpected: $expected, " +
           f"\treceived: $peekedValue\n"
       )
       read_counter = read_counter + 1

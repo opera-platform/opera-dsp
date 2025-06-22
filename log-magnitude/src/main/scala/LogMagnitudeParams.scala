@@ -17,8 +17,8 @@ case class LogMagnitudeParams[T <: Data](
   logType     : Option[T] = None,
   magType     : MagType = JPL,    // Parameter to select used magnitude type
   lutDataWidth: Int = 16,         // Look Up Table data width
-  addPipeRegs : Int = 1,          // Number of Pipeline Registers after addition
-  mulPipeRegs : Int = 1,          // Number of Pipeline Registers after multiplication
+  addPipeRegs : Boolean = false,  // Number of Pipeline Registers after addition
+  mulPipeRegs : Boolean = false,  // Number of Pipeline Registers after multiplication
   binaryGrowth: Int = 0,          // Number of bits for binary point growth
   trimType    : TrimType          // TrimType to used after arithmetic operations
 )

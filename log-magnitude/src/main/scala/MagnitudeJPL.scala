@@ -8,7 +8,6 @@ import dsptools._
 import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
-// TODO: Add delays, we have pipeline registers but not alignment for ready-valid
 // Jet Propulsion Laboratory magnitude approximation
 //     { 1.0 * X + 1/8 * Y;  X >= 3Y
 // A = {
@@ -17,6 +16,8 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 // Y = min(|I|,|Q|)
 // Paper: https://ipnpr.jpl.nasa.gov/progress_report/42-40/40L.PDF
 class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
+  val addPipeRegs = if (params.addPipeRegs) 1 else 0
+
   // IO
   val io = IO(new LogMagnitudeIO(params))
 
@@ -29,23 +30,63 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
 
   // A = 1.0 * X + 1/8 * Y;  X >= 3Y
   // Align geA (greater or equal A) with leA (less or equal A)
-  val geA = DspContext.withNumAddPipes(2 * params.addPipeRegs) {
+  val geA: T = DspContext.alter(DspContext.current.copy(
+      trimType = params.trimType
+    )) {
     x.context_+(BinaryRepresentation[T].shr(y, 3))
   }
+  private val r_geA: Option[Vec[geA.type]] = if (params.addPipeRegs) Some(Reg(Vec(2 * addPipeRegs, geA.cloneType))) else None
 
   // We want to avoid multiplication 7/8 * X. So we will instead subtract 1/8*X from X
-  private val x_7_8 = DspContext.withNumAddPipes(params.addPipeRegs) { x.context_-(BinaryRepresentation[T].shr(x, 3)) }
-  // A= 7/8 * X + 1/2 * Y;  X <= 3Y
-  val leA = DspContext.withNumAddPipes(params.addPipeRegs) {
-    x_7_8.context_+(ShiftRegister(BinaryRepresentation[T].shr(y, 1), params.addPipeRegs, true.B))
+  private val x_7_8 = DspContext.alter(DspContext.current.copy(
+    trimType = params.trimType
+  )) {
+    x.context_-(BinaryRepresentation[T].shr(x, 3))
   }
-  private val A = Real[T].max(geA, leA)
+  private val r_x_7_8: Option[Vec[x_7_8.type]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, x_7_8.cloneType))) else None
 
-  val w_out = Wire(io.out.cloneType)
-  w_out.bits  := A
-  w_out.valid := io.in.valid
-  io.in.ready := w_out.ready
-  AlignHandshake(2*params.addPipeRegs, w_out, io.out) := A
+
+  // A= 7/8 * X + 1/2 * Y;  X <= 3Y
+  val leA: T = DspContext.alter(DspContext.current.copy(
+    trimType = params.trimType
+  )) {
+    if (params.addPipeRegs)
+      r_x_7_8.get.head.context_+(ShiftRegister(BinaryRepresentation[T].shr(y, 1), addPipeRegs, true.B))
+    else
+      x_7_8.context_+(ShiftRegister(BinaryRepresentation[T].shr(y, 1), addPipeRegs, true.B))
+  }
+  private val r_leA: Option[Vec[leA.type]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, leA.cloneType))) else None
+
+  private val A =
+    if (params.addPipeRegs)
+      Real[T].max(r_geA.get.last, r_leA.get.last)
+    else
+      Real[T].max(geA, leA)
+
+  io.out.bits := A.asTypeOf(io.out.bits)
+
+  // Handshake control
+  if (params.addPipeRegs) {
+    val handshake = AlignHandshake(2 * addPipeRegs, io.in.valid, io.out.ready)
+    for (i <- 0 until 2 * addPipeRegs) {
+      when(handshake._1(i)) {
+        if (i == 0) {
+          r_geA.get(i) := geA
+          r_x_7_8.get.head := x_7_8
+        }
+        else {
+          r_geA.get(i) := r_geA.get(i-1)
+          r_leA.get.head := leA
+        }
+      }
+    }
+    io.in.ready  := handshake._1.head
+    io.out.valid := handshake._2.last
+  }
+  else {
+    io.out.valid := io.in.valid
+    io.in.ready  := io.out.ready
+  }
 }
 
 
@@ -54,7 +95,7 @@ object MagnitudeJPLApp extends App {
     inputType    = DspComplex(FixedPoint(16.W, 14.BP)),
     outputType   = FixedPoint(16.W, 14.BP),
     magType      = JPL,
-    addPipeRegs  = 1,
+    addPipeRegs  = false,
     binaryGrowth = 0,
     trimType     = Convergent
   )
