@@ -16,17 +16,17 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 // Y = min(|I|,|Q|)
 // Paper: https://ipnpr.jpl.nasa.gov/progress_report/42-40/40L.PDF
 class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
-  val addPipeRegs = if (params.addPipeRegs) 1 else 0
+  val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
 
   // IO
-  val io = IO(new LogMagnitudeIO(params))
+  val io: LogMagnitudeIO[T] = IO(new LogMagnitudeIO(params))
 
   // Get I (real) and Q (imaginary) absolute values
-  val absI = Real[T].abs(io.in.bits.real)
-  val absQ = Real[T].abs(io.in.bits.imag)
+  val absI: T = Real[T].abs(io.in.bits.real)
+  val absQ: T = Real[T].abs(io.in.bits.imag)
   // Calculate X and Y
-  val x = Real[T].max(absI, absQ)
-  val y = Real[T].min(absI, absQ)
+  val x: T = Real[T].max(absI, absQ)
+  val y: T = Real[T].min(absI, absQ)
 
   // A = 1.0 * X + 1/8 * Y;  X >= 3Y
   // Align geA (greater or equal A) with leA (less or equal A)

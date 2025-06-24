@@ -8,3 +8,8 @@ class LogMagnitudeIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends
   val in = Flipped(Decoupled(params.inputType))
   val out = Decoupled(params.outputType)
 }
+
+class LogIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends Bundle {
+  val in  = Flipped(Decoupled(params.realType.get))
+  val out = Decoupled(params.outputType)
+}
