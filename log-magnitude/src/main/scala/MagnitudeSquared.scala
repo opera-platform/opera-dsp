@@ -16,14 +16,14 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
   val io: LogMagnitudeIO[T] = IO(new LogMagnitudeIO(params))
 
   // Get I (real) and Q (imaginary) absolute values
-  val absI: T = Real[T].abs(io.in.bits.real)
-  val absQ: T = Real[T].abs(io.in.bits.imag)
+  val I: T = io.in.bits.real
+  val Q: T = io.in.bits.imag
 
   // I*I
   private val squareI = DspContext.alter(DspContext.current.copy(
     binaryPointGrowth = params.binaryGrowth, trimType = params.trimType
   )) {
-    absI.context_*(absI)
+    I.context_*(I)
   }
   private val r_squareI = if (params.mulPipeRegs) Some(Reg(squareI.cloneType)) else None
 
@@ -31,7 +31,7 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
   private val squareQ = DspContext.alter(DspContext.current.copy(
     binaryPointGrowth = params.binaryGrowth, trimType = params.trimType
   )) {
-    absQ.context_*(absQ)
+    Q.context_*(Q)
   }
   private val r_squareQ = if (params.mulPipeRegs) Some(Reg(squareQ.cloneType)) else None
 
