@@ -7,8 +7,10 @@ import dsptools.numbers.DspComplex
 import fixedpoint._
 import opera.common.{ArithmeticUtils, SignalUtils}
 
-class MagnitudeJPLTester(
-  dut        : MagnitudeJPL[FixedPoint],
+import scala.math.BigDecimal.double2bigDecimal
+
+class MagnitudeSquaredTester(
+  dut        : MagnitudeSquared[FixedPoint],
   params     : LogMagnitudeParams[FixedPoint],
   sampleSize : Int,
   verbose    : Boolean = true,
@@ -48,7 +50,9 @@ class MagnitudeJPLTester(
   // If windowing function is defined and windowing is enabled, calculate the result
   // Otherwise, output of the block should be the same as input
   val expectedData: Seq[BigInt] = inDataComplex.map {case (real, imag) =>
-    val out = jpl(real.toLong, imag.toLong)
+    val tmp = square(real.toLong, imag.toLong)
+    val scaled = tmp.toDouble / scala.math.pow(2, 2 * inputBinPoint - outputBinPoint)
+    val out = ArithmeticUtils.roundWithMode(scaled, params.trimType).toBigInt
     out
   }
 

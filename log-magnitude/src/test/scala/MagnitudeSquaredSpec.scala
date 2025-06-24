@@ -7,27 +7,30 @@ import fixedpoint._
 import org.chipsalliance.cde.config.Parameters
 import org.scalatest.flatspec.AnyFlatSpec
 
-class MagnitudeSpec extends AnyFlatSpec with ChiselScalatestTester {
+class MagnitudeSquaredSpec extends AnyFlatSpec with ChiselScalatestTester {
   behavior of "Magnitude"
 
   implicit val p: Parameters = Parameters.empty
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
-  val beatBytes  = 4
-  val sampleSize = 1024
-  val verbose    = true
-  val random     = true
+  val beatBytes   = 4
+  val sampleSize  = 1024
+  val verbose     = true
+  val random      = true
+  val inputWidth  = 16
+  val binaryPoint = 10
 
-  for (magType <- Seq(JPL)) {
+  for (magType <- Seq(Squared)) {
     for (addPipeRegs <- Seq(false, true)) {
-      for (mulPipeRegs <- Seq(false)) {
-        for (binaryGrowth <- Seq(0)) {
-          for (binaryPoint <- Seq(10, 12, 14)) {
+      for (mulPipeRegs <- Seq(false, true)) {
+        for (binaryGrowth <- Seq(binaryPoint)) {
+          for (binaryPoint <- Seq(binaryPoint)) {
             for (binaryPointDiff <- Seq(0, 2, 4)) {
               // Parameters
+              val outputWidth = inputWidth + (inputWidth - binaryPoint) + binaryPointDiff + 1
               val params     = LogMagnitudeParams[FixedPoint](
-                inputType    = DspComplex(FixedPoint(16.W, binaryPoint.BP)),
-                outputType   = FixedPoint((16 + binaryPointDiff).W, (binaryPoint + binaryPointDiff).BP),
+                inputType    = DspComplex(FixedPoint(inputWidth.W, binaryPoint.BP)),
+                outputType   = FixedPoint(outputWidth.W, (binaryPoint + binaryPointDiff).BP),
                 magType      = magType,
                 addPipeRegs  = addPipeRegs,
                 mulPipeRegs  = mulPipeRegs,
@@ -43,10 +46,10 @@ class MagnitudeSpec extends AnyFlatSpec with ChiselScalatestTester {
                 s"\t\tbinaryPoint     = $binaryPoint,\n" +
                 s"\t\tbinaryPointDiff = $binaryPointDiff\n" in {
 
-                test(new MagnitudeJPL[FixedPoint](params = params))
+                test(new MagnitudeSquared[FixedPoint](params = params))
                   .withAnnotations(annotations)
                   .runPeekPoke(c =>
-                    new MagnitudeJPLTester(
+                    new MagnitudeSquaredTester(
                       dut = c,
                       params = params,
                       sampleSize = sampleSize,

@@ -23,4 +23,15 @@ trait TestUtils {
    BigInt(A)
  }
 
+  def square(real: Long, imag: Long): BigInt = {
+    // Get I (real) and Q (imaginary) absolute values
+    val absI = abs(real)
+    val absQ = abs(imag)
+    // Calculate I*I and Q*Q
+    val squareI = absI*absI
+    val squareQ = absQ*absQ
+    // Return I*I and Q*Q
+    BigInt(squareI + squareQ)
+  }
+
 }
