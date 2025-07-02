@@ -49,10 +49,13 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   })
 
   // Calculate k
-  private val log2A = Log2(A.asUInt)
+  private val log2A = Log2(A.asUInt) // Find the location of most significant bit that is equal to one
   dontTouch(log2A)
   log2A.suggestName("log2A")
-  private val k = (log2A - inputBinPointPosition.U).asSInt
+  private val k = Wire(SInt((inputWidth - inputBinPointPosition).W))
+  k :=
+    (log2A.asTypeOf(UInt((inputWidth - inputBinPointPosition).W)) -
+    inputBinPointPosition.U.asTypeOf(UInt((inputWidth - inputBinPointPosition).W))).asTypeOf(k)
   dontTouch(k)
   k.suggestName("k")
 

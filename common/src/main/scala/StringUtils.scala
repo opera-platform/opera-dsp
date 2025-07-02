@@ -10,4 +10,12 @@ object StringUtils {
     if (peekedString.length >= hexNumbers) peekedString
     else "0" * (hexNumbers - peekedString.length) + peekedString
   }
+
+  def formatStringBinary(data: BigInt, numberOfBits: Int): String = {
+    // Convert BigInt to uppercase Hex
+    val peekedString = data.toString(2)
+    // Fill with zeroes
+    if (peekedString.length >= numberOfBits) peekedString
+    else "0" * (numberOfBits - peekedString.length) + peekedString
+  }
 }
