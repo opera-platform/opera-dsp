@@ -60,14 +60,7 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   k.suggestName("k")
 
   // Calculate LUT address
-  private val noLeadOne =  A.asUInt - BinaryRepresentation[UInt].shl(1.U, log2A).asTypeOf(A.asUInt)
-  dontTouch(noLeadOne)
-  noLeadOne.suggestName("noLeadOne")
-  private val shiftNum = (inputWidth - 1).U - log2A
-  dontTouch(shiftNum)
-  shiftNum.suggestName("shiftNum")
-
-  private val address = BinaryRepresentation[UInt].shl(noLeadOne, shiftNum)(inputWidth - 2, inputWidth - params.lutTableSize - 1)
+  private val address = BinaryRepresentation[UInt].shr(Cat(A.asUInt, 0.U(params.lutTableSize.W)), log2A)(params.lutTableSize - 1, 0)
   dontTouch(address)
   address.suggestName("address")
 
@@ -78,7 +71,7 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   logFraction.suggestName("logFraction")
 
   // out = k + logFraction
-  private val log2Mag = Wire(params.outputType) // TODO: bilo je logType
+  private val log2Mag = Wire(params.outputType)
   log2Mag := k.asFixedPoint(0.BP)  + logFraction
   dontTouch(log2Mag)
   log2Mag.suggestName("log2Mag")
