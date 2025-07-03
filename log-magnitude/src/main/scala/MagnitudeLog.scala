@@ -1,5 +1,6 @@
 package opera.logmagnitude
 
+import breeze.linalg.max
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util.{circt => _, _}
@@ -71,15 +72,25 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   logFraction.suggestName("logFraction")
 
   // out = k + logFraction
-  private val log2Mag = Wire(params.outputType)
+  private val log2MagWidth: Int = inputWidth - inputBinPointPosition + max(inputBinPointPosition, logBinPointPosition)
+  private val log2MagBinPoint: Int = max(inputBinPointPosition, logBinPointPosition)
+  private val log2Mag = Wire(FixedPoint(log2MagWidth.W, log2MagBinPoint.BP))
   log2Mag := k.asFixedPoint(0.BP)  + logFraction
   dontTouch(log2Mag)
   log2Mag.suggestName("log2Mag")
 
-  private val output = Wire(params.outputType.cloneType)
-  output := log2Mag
+  private val output =
+    if (inputBinPointPosition > logBinPointPosition)
+      log2Mag
+    else {
+      DspContext.alter(DspContext.current.copy(
+        binaryPointGrowth = 0, trimType = params.trimType
+      )) {
+        log2Mag.div2(logBinPointPosition - inputBinPointPosition)
+      }
+    }
 
-  io.out.bits  := output
+  io.out.bits  := output.asTypeOf(io.out.bits)
   io.out.valid := io.in.valid
   io.in.ready  := io.out.ready
 }
