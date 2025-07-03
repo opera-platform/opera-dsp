@@ -10,15 +10,18 @@ import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint, fromSIntToFixedPoint}
 
 // out = log(A)
+// N = 2^k * (1 + f)
+// log(N) = k + log2(1 + f)
 class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
+  val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
+
   // IO
   val io: LogIO[T] = IO(new LogIO(params))
 
   private val A = io.in.bits
 
-  val latency: Int = if (params.addPipeRegs) 1 else 0
-
   private val inputWidth = params.realType.get.getWidth
+  private val logWidth   = params.logType.get.getWidth
 
   private val inputBinPointPosition = params.realType.get match {
     case fp: FixedPoint => fp.binaryPoint.get
@@ -29,17 +32,14 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     case _ => 0
   }
 
-  // Generate Look Up Table
-  // N = 2^k * (1 + f)
-  // log(N) = k + log2(1 + f)
-  // LUT contains: log2(1 + f)
+  // Generate Look Up Table, LUT contains value log2(1 + f)
   private val logLUT = VecInit({
     val lnOf2 = scala.math.log(2) // natural log of 2
     def log2(x: Double): Double = scala.math.log(x) / lnOf2
 
     val sizeLUT = 1 << params.lutTableSize
     val LUT = (0 until sizeLUT).map(n => {
-      val lookupWire = Wire(FixedPoint((logBinPointPosition + 1).W, logBinPointPosition.BP))
+      val lookupWire = Wire(FixedPoint(logWidth.W, logBinPointPosition.BP))
       // log2(1 + f)
       DspContext.withTrimType(Convergent) {
         lookupWire := lookupWire.cloneType.fromDoubleWithFixedWidth(log2(1 + n.toDouble / sizeLUT))
@@ -49,50 +49,59 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     LUT
   })
 
+  // Find the location of most significant bit that is equal to one
+  private val log2A = Log2(A.asUInt)
   // Calculate k
-  private val log2A = Log2(A.asUInt) // Find the location of most significant bit that is equal to one
-  dontTouch(log2A)
-  log2A.suggestName("log2A")
   private val k = Wire(SInt((inputWidth - inputBinPointPosition).W))
   k :=
     (log2A.asTypeOf(UInt((inputWidth - inputBinPointPosition).W)) -
     inputBinPointPosition.U.asTypeOf(UInt((inputWidth - inputBinPointPosition).W))).asTypeOf(k)
-  dontTouch(k)
-  k.suggestName("k")
 
   // Calculate LUT address
-  private val address = BinaryRepresentation[UInt].shr(Cat(A.asUInt, 0.U(params.lutTableSize.W)), log2A)(params.lutTableSize - 1, 0)
-  dontTouch(address)
-  address.suggestName("address")
+  private val address =
+    BinaryRepresentation[UInt].shr(Cat(A.asUInt, 0.U(params.lutTableSize.W)), log2A)(params.lutTableSize - 1, 0)
 
   // Get LUT value
-  private val logFraction = Wire(FixedPoint((logBinPointPosition + 1).W, logBinPointPosition.BP))
+  private val logFraction = Wire(FixedPoint(logWidth.W, logBinPointPosition.BP))
   logFraction := logLUT(address)
-  dontTouch(logFraction)
-  logFraction.suggestName("logFraction")
 
   // out = k + logFraction
   private val log2MagWidth: Int = inputWidth - inputBinPointPosition + max(inputBinPointPosition, logBinPointPosition)
   private val log2MagBinPoint: Int = max(inputBinPointPosition, logBinPointPosition)
   private val log2Mag = Wire(FixedPoint(log2MagWidth.W, log2MagBinPoint.BP))
   log2Mag := k.asFixedPoint(0.BP)  + logFraction
-  dontTouch(log2Mag)
-  log2Mag.suggestName("log2Mag")
+  // Optional pipe register
+  private val r_log2Mag = if (params.addPipeRegs) Some(Reg(log2Mag.cloneType)) else None
 
   private val output =
     if (inputBinPointPosition > logBinPointPosition)
-      log2Mag
+      if (params.addPipeRegs) r_log2Mag.get else log2Mag
     else {
       DspContext.alter(DspContext.current.copy(
         binaryPointGrowth = 0, trimType = params.trimType
       )) {
-        log2Mag.div2(logBinPointPosition - inputBinPointPosition)
+        if (params.addPipeRegs)
+          r_log2Mag.get.div2(logBinPointPosition - inputBinPointPosition)
+        else
+          log2Mag.div2(logBinPointPosition - inputBinPointPosition)
       }
     }
 
   io.out.bits  := output.asTypeOf(io.out.bits)
-  io.out.valid := io.in.valid
-  io.in.ready  := io.out.ready
+
+  // Handshake control
+  if (params.addPipeRegs) {
+    val handshake = AlignHandshake(addPipeRegs, io.in.valid, io.out.ready)
+    when(handshake._1.head) {
+      r_log2Mag.get := log2Mag
+    }
+    io.in.ready  := handshake._1.head
+    io.out.valid := handshake._2.head
+  }
+  else {
+    io.out.valid := io.in.valid
+    io.in.ready  := io.out.ready
+  }
 }
 
 
@@ -103,7 +112,7 @@ object MagnitudeLogApp extends App {
     outputType   = FixedPoint(20.W, 14.BP),
     magType      = Log,
     logType      = Some(FixedPoint(15.W, 14.BP)),
-    lutTableSize = 4,
+    lutTableSize = 10,
     addPipeRegs  = false,
     binaryGrowth = 0,
     trimType     = Convergent
