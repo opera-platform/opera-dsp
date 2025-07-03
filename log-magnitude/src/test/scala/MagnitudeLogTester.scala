@@ -12,6 +12,7 @@ import opera.common.{ArithmeticUtils, SignalUtils}
 import scala.math.BigDecimal.double2bigDecimal
 import scala.util.Random
 
+// TODO: Log model napravi!
 class MagnitudeLogTester(
   dut        : MagnitudeLog[FixedPoint],
   params     : LogMagnitudeParams[FixedPoint],
@@ -47,23 +48,36 @@ class MagnitudeLogTester(
   // generate test array
   val inData: Seq[BigInt] = Seq.tabulate(sampleSize) { i =>
     if (dataRandom)
-      Random.nextLong(1 << (inputWidth - 1))
+      Random.nextLong((1 << inputWidth) - 1)
     else
-      i * (1 << (inputWidth - 1)) / sampleSize + 1
+      i * (1 << inputWidth) / sampleSize
   }
 
   // Calculate reference value
   val expectedData: Seq[Double] = inData.map { m =>
-    val mScaled = m >> (inputBinPoint - params.lutTableSize)
-    val mCropped = mScaled << (inputBinPoint - params.lutTableSize)
     val log2 =
-      if (mCropped != 0)
-        log(mCropped.toDouble / scala.math.pow(2, inputBinPoint)) / log(2)
-      else
+      if (m == 0)
         -inputBinPoint
+      else {
+        val leadingOne = m.bitLength - 1
+        val cropBits = leadingOne - params.lutTableSize
+        val mCropped = if (cropBits > 0)  {
+          val mask = ~((BigInt(1) << cropBits) - 1)
+          m & mask
+        }
+        else m
+        log(mCropped.toDouble / scala.math.pow(2, inputBinPoint)) / log(2)
+      }
+
     val log2scaled = log2 * scala.math.pow(2, logBinPoint)
     val log2rounded = ArithmeticUtils.roundWithMode(log2scaled, params.trimType).toBigInt
-    log2rounded.toDouble / scala.math.pow(2, logBinPoint)
+    if (logBinPoint < inputBinPoint)
+      log2rounded.toDouble / scala.math.pow(2, logBinPoint)
+    else {
+      val scaled = log2rounded.toDouble / scala.math.pow(2, logBinPoint - inputBinPoint)
+      val rounded = ArithmeticUtils.roundWithMode(scaled, params.trimType).toBigInt
+      rounded.toDouble * scala.math.pow(2, logBinPoint - inputBinPoint) / scala.math.pow(2, logBinPoint)
+    }
   }
 
   // Reset DeCoupled nodes

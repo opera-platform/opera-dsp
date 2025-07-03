@@ -1,6 +1,7 @@
 package opera.logmagnitude
 
 import chisel3.fromIntToWidth
+import chisel3.util.log2Ceil
 import chiseltest.{ChiselScalatestTester, VerilatorBackendAnnotation, WriteVcdAnnotation}
 import dsptools.numbers.{Convergent, DspComplex}
 import fixedpoint._
@@ -14,40 +15,37 @@ class MagnitudeLogSpec extends AnyFlatSpec with ChiselScalatestTester {
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
   val beatBytes   = 4
-  val sampleSize  = 32
+  val sampleSize  = 128
   val verbose     = true
   val random      = false
   val dataRandom  = false
-  val inputWidth  = 16
-  val binaryPoint = 10
 
   for (magType <- Seq(Log)) {
     for (addPipeRegs <- Seq(false)) {
-      for (mulPipeRegs <- Seq(false)) {
-        for (binaryGrowth <- Seq(binaryPoint)) {
-          for (binaryPoint <- Seq(binaryPoint)) {
-            for (binaryPointDiff <- Seq(0)) {
+      for (lutTableSize <- Seq(2, 4, 10)) {
+          for (binaryPoint <- Seq(8, 10, 12)) {
+            for (binaryLogPoint <- Seq(8, 10, 12)) {
+              val inputWidth = binaryPoint + log2Ceil(binaryPoint) + 1
               // Parameters
-              val params     = LogMagnitudeParams[FixedPoint](
-                inputType    = DspComplex(FixedPoint(inputWidth.W, binaryPoint.BP)),
-                realType     = Some(FixedPoint(inputWidth.W, binaryPoint.BP)),
-                outputType   = FixedPoint(inputWidth.W, (binaryPoint).BP),
-                logType      = Some(FixedPoint((binaryPoint + 1).W, binaryPoint.BP)),
-                lutTableSize = 4,
-                magType      = magType,
-                addPipeRegs  = addPipeRegs,
-                mulPipeRegs  = mulPipeRegs,
-                binaryGrowth = binaryGrowth,
-                trimType     = Convergent
+              val params = LogMagnitudeParams[FixedPoint](
+                inputType = DspComplex(FixedPoint(inputWidth.W, binaryPoint.BP)),
+                realType = Some(FixedPoint(inputWidth.W, binaryPoint.BP)),
+                outputType = FixedPoint(inputWidth.W, binaryPoint.BP),
+                logType = Some(FixedPoint((binaryLogPoint + 1).W, binaryLogPoint.BP)),
+                lutTableSize = lutTableSize,
+                magType = magType,
+                addPipeRegs = addPipeRegs,
+                mulPipeRegs = false,
+                binaryGrowth = 0,
+                trimType = Convergent
               )
 
               it should "pass when: \n" +
-                s"\t\tmagType = $magType,\n" +
+                s"\t\tmagType         = $magType,\n" +
                 s"\t\taddPipeRegs     = $addPipeRegs,\n" +
-                s"\t\tmulPipeRegs     = $mulPipeRegs,\n" +
-                s"\t\tbinaryGrowth    = $binaryGrowth,\n" +
+                s"\t\tlutTableSize    = $lutTableSize,\n" +
                 s"\t\tbinaryPoint     = $binaryPoint,\n" +
-                s"\t\tbinaryPointDiff = $binaryPointDiff\n" in {
+                s"\t\tbinaryLogPoint  = $binaryLogPoint,\n" in {
 
                 test(new MagnitudeLog[FixedPoint](params = params))
                   .withAnnotations(annotations)
@@ -67,5 +65,4 @@ class MagnitudeLogSpec extends AnyFlatSpec with ChiselScalatestTester {
         }
       }
     }
-  }
 }
