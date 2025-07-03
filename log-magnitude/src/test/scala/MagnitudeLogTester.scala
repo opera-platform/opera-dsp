@@ -118,9 +118,9 @@ class MagnitudeLogTester(
           f"${formatStringBinary(in >> inputBinPoint, inputWidth - inputBinPoint)}." +
           f"${formatStringBinary(in & ((1 << inputBinPoint) - 1), inputBinPoint)}, "
         )
-        print(f"input float: ${in.toDouble / scala.math.pow(2, inputBinPoint) }% 3.15f, ")
-        print(f"peeked data: ${1.0 * peekedValue.toLong / scala.math.pow(2, outputBinPoint)}% 3.15f, ")
-        print(f"expected data: $expected% 3.15f.\n")
+        print(f"input float: ${in.toDouble / scala.math.pow(2, inputBinPoint) }%18.14f, ")
+        print(f"peeked data: ${1.0 * peekedValue.toLong / scala.math.pow(2, outputBinPoint)}%18.14f, ")
+        print(f"expected data: $expected%18.14f.\n")
       }
       // Check results
       require(
