@@ -1,15 +1,17 @@
 package opera.logmagnitude
 
-import chisel3.util.Decoupled
-import chisel3.{Bundle, Data, Flipped}
-import dsptools.numbers.Real
+import chisel3.Bool
+import chisel3.util.{Decoupled, DecoupledIO}
+import chisel3.{Bundle, Data, Flipped, Input}
+import dsptools.numbers.{DspComplex, Real}
 
 class LogMagnitudeIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends Bundle {
-  val in = Flipped(Decoupled(params.inputType))
-  val out = Decoupled(params.outputType)
+  val in : DecoupledIO[DspComplex[T]] = Flipped(Decoupled(params.inputType))
+  val out: DecoupledIO[T] = Decoupled(params.outputType)
+  val sel: Option[Bool] = if (params.magType == LogSquaredJPL || params.magType == LogJPLSquared) Some(Input(Bool())) else None
 }
 
 class LogIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends Bundle {
-  val in  = Flipped(Decoupled(params.realType.get))
-  val out = Decoupled(params.outputType)
+  val in : DecoupledIO[T] = Flipped(Decoupled(params.realType.get))
+  val out: DecoupledIO[T] = Decoupled(params.outputType)
 }
