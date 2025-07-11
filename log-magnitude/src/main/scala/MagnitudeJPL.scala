@@ -1,5 +1,6 @@
 package opera.logmagnitude
 
+import breeze.linalg.max
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util.{circt => _, _}
@@ -18,52 +19,73 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
 
+  // Input binary points
+  val inputBinPoint = params.inputType.real match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+  // Output binary points
+  val outputBinPoint = params.outputType match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+
   // IO
   val io: LogMagnitudeIO[T] = IO(new LogMagnitudeIO(params))
 
   // Get I (real) and Q (imaginary) absolute values
-  val absI: T = Real[T].abs(io.in.bits.real)
-  val absQ: T = Real[T].abs(io.in.bits.imag)
+  val absI: UInt = Real[T].abs(io.in.bits.real).asUInt
+  val absQ: UInt = Real[T].abs(io.in.bits.imag).asUInt
   // Calculate X and Y
-  val x: T = Real[T].max(absI, absQ)
-  val y: T = Real[T].min(absI, absQ)
-
-  // A = 1.0 * X + 1/8 * Y;  X >= 3Y
-  // Align geA (greater or equal A) with leA (less or equal A)
-  val geA: T = DspContext.alter(DspContext.current.copy(
-      trimType = params.trimType
-    )) {
-    x.context_+(BinaryRepresentation[T].shr(y, 3))
+  val x: UInt = Wire(UInt(io.in.bits.real.getWidth.W))
+  val y: UInt = Wire(UInt(io.in.bits.real.getWidth.W))
+  when (absI > absQ) {
+    x := absI
+    y := absQ
+  }.otherwise {
+    x:= absQ
+    y:= absI
   }
-  private val r_geA: Option[Vec[geA.type]] = if (params.addPipeRegs) Some(Reg(Vec(2 * addPipeRegs, geA.cloneType))) else None
+
+  // geA = 1.0 * X + 1/8 * Y;  X >= 3Y
+  // Align geA (greater or equal A) with leA (less or equal A)
+  val geA: UInt = x +& (y >> 3).asUInt
+  private val r_geA: Option[Vec[UInt]] = if (params.addPipeRegs) Some(Reg(Vec(2 * addPipeRegs, geA.cloneType))) else None
 
   // We want to avoid multiplication 7/8 * X. So we will instead subtract 1/8*X from X
-  private val x_7_8 = DspContext.alter(DspContext.current.copy(
-    trimType = params.trimType
-  )) {
-    x.context_-(BinaryRepresentation[T].shr(x, 3))
-  }
-  private val r_x_7_8: Option[Vec[x_7_8.type]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, x_7_8.cloneType))) else None
+  private val x_7_8: UInt = x -& (x >> 3).asUInt
+  private val r_x_7_8: Option[Vec[UInt]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, x_7_8.cloneType))) else None
 
-
-  // A= 7/8 * X + 1/2 * Y;  X <= 3Y
-  val leA: T = DspContext.alter(DspContext.current.copy(
-    trimType = params.trimType
-  )) {
+  // leA = 7/8 * X + 1/2 * Y;  X <= 3Y
+  val leA: UInt =
     if (params.addPipeRegs)
-      r_x_7_8.get.head.context_+(ShiftRegister(BinaryRepresentation[T].shr(y, 1), addPipeRegs, true.B))
+      r_x_7_8.get.head +& ShiftRegister(y >> 1, addPipeRegs, true.B).asUInt
     else
-      x_7_8.context_+(ShiftRegister(BinaryRepresentation[T].shr(y, 1), addPipeRegs, true.B))
-  }
-  private val r_leA: Option[Vec[leA.type]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, leA.cloneType))) else None
+      x_7_8 +& (y >> 1).asUInt
+  private val r_leA: Option[Vec[UInt]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, leA.cloneType))) else None
 
-  private val A =
-    if (params.addPipeRegs)
-      Real[T].max(r_geA.get.last, r_leA.get.last)
-    else
-      Real[T].max(geA, leA)
+  private val A = Wire(UInt(max(geA.getWidth,leA.getWidth).W))
+    if (params.addPipeRegs) {
+      when(r_geA.get.last > r_leA.get.last) {
+        A := r_geA.get.last.zext.asUInt
+      }. otherwise {
+        A := r_leA.get.last.zext.asUInt
+      }
+    } else {
+      when(geA > leA) {
+        A := geA.zext.asUInt
+      }.otherwise {
+        A := leA.zext.asUInt
+      }
+    }
 
-  io.out.bits := A.asTypeOf(io.out.bits)
+  if (inputBinPoint > outputBinPoint) {
+    io.out.bits := DspContext.alter(DspContext.current.copy(binaryPointGrowth = 0, trimType = params.trimType)) {
+      val dataWidth = inputBinPoint + (params.outputType.getWidth - outputBinPoint)
+      A.zext.asTypeOf(FixedPoint(dataWidth.W, inputBinPoint.BP)).div2(inputBinPoint - outputBinPoint)
+    }.asTypeOf(io.out.bits)
+  } else
+    io.out.bits := A.zext.asTypeOf(io.out.bits)
 
   // Handshake control
   if (params.addPipeRegs) {
@@ -95,14 +117,12 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   }
 }
 
-
 object MagnitudeJPLApp extends App {
   val params = LogMagnitudeParams[FixedPoint](
     inputType    = DspComplex(FixedPoint(16.W, 14.BP)),
     outputType   = FixedPoint(16.W, 14.BP),
     magType      = JPL,
     addPipeRegs  = false,
-    binaryGrowth = 0,
     trimType     = Convergent
   )
 

@@ -13,7 +13,9 @@ object StringUtils {
 
   def formatStringBinary(data: BigInt, numberOfBits: Int): String = {
     // Convert BigInt to uppercase Hex
-    val peekedString = data.toString(2)
+    val mask = (BigInt(1) << numberOfBits) - 1
+    val maskedData = data & mask
+    val peekedString = maskedData.toString(2)
     // Fill with zeroes
     if (peekedString.length >= numberOfBits) peekedString
     else "0" * (numberOfBits - peekedString.length) + peekedString
