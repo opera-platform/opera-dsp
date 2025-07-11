@@ -67,25 +67,31 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
 
   // Handshake control
   if (params.addPipeRegs) {
+    val r_last    = Reg(Vec(2 * addPipeRegs, Bool()))
     val handshake = AlignHandshake(2 * addPipeRegs, io.in.valid, io.out.ready)
+
     for (i <- 0 until 2 * addPipeRegs) {
       when(handshake._1(i)) {
         if (i == 0) {
-          r_geA.get(i) := geA
+          r_last(i)        := io.i_last
+          r_geA.get(i)     := geA
           r_x_7_8.get.head := x_7_8
         }
         else {
-          r_geA.get(i) := r_geA.get(i-1)
+          r_last(i)      := r_last(i-1)
+          r_geA.get(i)   := r_geA.get(i-1)
           r_leA.get.head := leA
         }
       }
     }
+    io.o_last    := r_last.last
     io.in.ready  := handshake._1.head
     io.out.valid := handshake._2.last
   }
   else {
     io.out.valid := io.in.valid
     io.in.ready  := io.out.ready
+    io.o_last    := io.i_last
   }
 }
 

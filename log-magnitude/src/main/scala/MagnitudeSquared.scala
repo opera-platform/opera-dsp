@@ -65,7 +65,9 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
 
   // Handshake control
   if (params.addPipeRegs || params.mulPipeRegs) {
+    val r_last    = Reg(Vec(addPipeRegs + mulPipeRegs, Bool()))
     val handshake = AlignHandshake(addPipeRegs + mulPipeRegs, io.in.valid, io.out.ready)
+
     for (i <- 0 until addPipeRegs + mulPipeRegs) {
       when(handshake._1(i)) {
         if (i == 0) {
@@ -76,18 +78,22 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
           else {
             r_sumSquares.get := sumSquares
           }
+          r_last(i) := io.i_last
         }
         else {
           r_sumSquares.get := sumSquares
+          r_last(i) := r_last(i-1)
         }
       }
     }
-    io.in.ready := handshake._1.head
+    io.o_last    := r_last.last
+    io.in.ready  := handshake._1.head
     io.out.valid := handshake._2.last
   }
   else {
     io.out.valid := io.in.valid
-    io.in.ready := io.out.ready
+    io.in.ready  := io.out.ready
+    io.o_last    := io.i_last
   }
 
 }

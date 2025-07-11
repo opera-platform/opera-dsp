@@ -96,16 +96,21 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
 
   // Handshake control
   if (params.addPipeRegs) {
+    val r_last    = Reg(Vec(addPipeRegs, Bool()))
     val handshake = AlignHandshake(addPipeRegs, io.in.valid, io.out.ready)
+
     when(handshake._1.head) {
+      r_last.head   := io.i_last
       r_log2Mag.get := log2Mag
     }
+    io.o_last    := r_last.last
     io.in.ready  := handshake._1.head
     io.out.valid := handshake._2.head
   }
   else {
     io.out.valid := io.in.valid
     io.in.ready  := io.out.ready
+    io.o_last    := io.i_last
   }
 }
 

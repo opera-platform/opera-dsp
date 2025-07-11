@@ -57,36 +57,53 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
 
   if (params.magType == LogJPLSquared) {
     magLog.io.in <> magJPL.io.out
+    magLog.io.i_last := magJPL.io.o_last
     when(io.sel.get) {
       io.out <> magLog.io.out
+      io.o_last := magLog.io.o_last
       magJPL.io.in <> io.in
+      magJPL.io.i_last := io.i_last
+      // Magnitude Squared is not connected
       magSquared.io.in.valid  := false.B
+      magSquared.io.i_last    := false.B
       magSquared.io.in.bits   := 0.U.asTypeOf(magSquared.io.in.bits)
       magSquared.io.out.ready := false.B
     }.otherwise {
       io.out <> magSquared.io.out
+      io.o_last := magSquared.io.o_last
       magSquared.io.in <> io.in
+      magSquared.io.i_last := io.i_last
+      // Magnitude JPL is not connected
       magJPL.io.in.valid  := false.B
+      magJPL.io.i_last    := false.B
       magJPL.io.in.bits   := 0.U.asTypeOf(magJPL.io.in.bits)
       magLog.io.out.ready := false.B
     }
   } else {
     magLog.io.in <> magSquared.io.out
+    magLog.io.i_last <> magSquared.io.o_last
     when(io.sel.get) {
       io.out <> magLog.io.out
+      io.o_last := magLog.io.o_last
       magSquared.io.in <> io.in
+      magSquared.io.i_last := io.i_last
+      // Magnitude JPL is not connected
       magJPL.io.in.valid  := false.B
+      magJPL.io.i_last    := false.B
       magJPL.io.in.bits   := 0.U.asTypeOf(magJPL.io.in.bits)
       magJPL.io.out.ready := false.B
     }.otherwise {
       io.out <> magJPL.io.out
+      io.o_last := magJPL.io.o_last
       magJPL.io.in <> io.in
+      magJPL.io.i_last := io.i_last
+      // Magnitude Squared is not connected
       magSquared.io.in.valid := false.B
+      magSquared.io.i_last   := false.B
       magSquared.io.in.bits  := 0.U.asTypeOf(magSquared.io.in.bits)
       magLog.io.out.ready    := false.B
     }
   }
-
 }
 
 
