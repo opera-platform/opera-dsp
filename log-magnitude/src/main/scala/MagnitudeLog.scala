@@ -20,14 +20,19 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
 
   private val A = io.in.bits
 
-  private val inputWidth = params.realType.get.getWidth
-  private val logWidth   = params.logType.get.getWidth
+  private val inputWidth  = params.realType.get.getWidth
+  private val logWidth    = params.logType.get.getWidth
+  private val outputWidth = params.outputType.getWidth
 
   private val inputBinPointPosition = params.realType.get match {
     case fp: FixedPoint => fp.binaryPoint.get
     case _ => 0
   }
   private val logBinPointPosition = params.logType.get match {
+    case fp: FixedPoint => fp.binaryPoint.get
+    case _ => 0
+  }
+  private val outputBinPointPosition = params.outputType match {
     case fp: FixedPoint => fp.binaryPoint.get
     case _ => 0
   }
@@ -66,24 +71,24 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   logFraction := logLUT(address)
 
   // out = k + logFraction
-  private val log2MagWidth: Int = inputWidth - inputBinPointPosition + max(inputBinPointPosition, logBinPointPosition)
-  private val log2MagBinPoint: Int = max(inputBinPointPosition, logBinPointPosition)
+  private val log2MagBinPoint: Int = max(outputBinPointPosition, logBinPointPosition)
+  private val log2MagWidth: Int = outputWidth - outputBinPointPosition + log2MagBinPoint
   private val log2Mag = Wire(FixedPoint(log2MagWidth.W, log2MagBinPoint.BP))
   log2Mag := k.asFixedPoint(0.BP)  + logFraction
   // Optional pipe register
   private val r_log2Mag = if (params.addPipeRegs) Some(Reg(log2Mag.cloneType)) else None
 
   private val output =
-    if (inputBinPointPosition > logBinPointPosition)
+    if (outputBinPointPosition > logBinPointPosition)
       if (params.addPipeRegs) r_log2Mag.get else log2Mag
     else {
       DspContext.alter(DspContext.current.copy(
         binaryPointGrowth = 0, trimType = params.trimType
       )) {
         if (params.addPipeRegs)
-          r_log2Mag.get.div2(logBinPointPosition - inputBinPointPosition)
+          r_log2Mag.get.div2(logBinPointPosition - outputBinPointPosition)
         else
-          log2Mag.div2(logBinPointPosition - inputBinPointPosition)
+          log2Mag.div2(logBinPointPosition - outputBinPointPosition)
       }
     }
 
@@ -111,7 +116,7 @@ object MagnitudeLogApp extends App {
     realType     = Some(FixedPoint(20.W, 14.BP)),
     outputType   = FixedPoint(20.W, 14.BP),
     magType      = Log,
-    logType      = Some(FixedPoint(15.W, 14.BP)),
+    logType      = Some(FixedPoint(16.W, 14.BP)),
     lutTableSize = 10,
     addPipeRegs  = false,
     binaryGrowth = 0,

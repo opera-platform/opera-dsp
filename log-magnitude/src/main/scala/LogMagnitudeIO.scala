@@ -1,8 +1,7 @@
 package opera.logmagnitude
 
-import chisel3.Bool
 import chisel3.util.{Decoupled, DecoupledIO}
-import chisel3.{Bundle, Data, Flipped, Input}
+import chisel3.{Bool, Bundle, Data, Flipped, Input}
 import dsptools.numbers.{DspComplex, Real}
 
 class LogMagnitudeIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends Bundle {

@@ -96,11 +96,11 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
 object MagnitudeSquaredApp extends App {
   val params = LogMagnitudeParams[FixedPoint](
     inputType    = DspComplex(FixedPoint(16.W, 14.BP)),
-    outputType   = FixedPoint(16.W, 14.BP),
+    outputType   = FixedPoint(20.W, 14.BP),
     magType      = Squared,
     addPipeRegs  = true,
     mulPipeRegs  = true,
-    binaryGrowth = 0,
+    binaryGrowth = 14,
     trimType     = Convergent
   )
 

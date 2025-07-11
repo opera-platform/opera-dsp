@@ -2,13 +2,11 @@ package opera.logmagnitude
 
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
-import chisel3.util.{circt => _, _}
+import chisel3.util.{circt => _}
 import circt.stage.{ChiselStage, FirtoolOption}
-import dsptools._
 import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
-// TODO: Add muxes!
 class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   require(params.magType == LogJPLSquared || params.magType == LogSquaredJPL)
 
@@ -42,6 +40,7 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
     outputType   = params.outputType,
     logType      = params.logType,
     magType      = Log,
+    lutTableSize = params.lutTableSize,
     addPipeRegs  = params.addPipeRegs,
     mulPipeRegs  = params.mulPipeRegs,
     binaryGrowth = params.binaryGrowth,
