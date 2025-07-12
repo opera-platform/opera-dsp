@@ -7,23 +7,14 @@ import chisel3.util.{circt => _, _}
 import circt.stage.{ChiselStage, FirtoolOption}
 import dsptools._
 import dsptools.numbers._
-import fixedpoint.{FixedPoint, fromIntToBinaryPoint, fromSIntToFixedPoint}
+import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
 // out = log(A)
 // N = 2^k * (1 + f)
 // log(N) = k + log2(1 + f)
 class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
-  val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
-
-  // IO
-  val io: LogIO[T] = IO(new LogIO(params))
-
-  private val A = io.in.bits
-
-  private val inputWidth  = params.realType.get.getWidth
-  private val logWidth    = params.logType.get.getWidth
-  private val outputWidth = params.outputType.getWidth
-
+  // Get data information
+  private val logWidth = params.logType.get.getWidth
   private val inputBinPointPosition = params.realType.get match {
     case fp: FixedPoint => fp.binaryPoint.get
     case _ => 0
@@ -36,6 +27,16 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     case fp: FixedPoint => fp.binaryPoint.get
     case _ => 0
   }
+  // It is required that logBinPointPosition >= params.lutTableSize in order to generate LUT properly
+  require(logBinPointPosition >= params.lutTableSize)
+  // It is required for width of whole part of output to be greater then Log2(inputBingPoint) for correct minimum value
+  require(params.outputType.getWidth - outputBinPointPosition > log2Ceil(inputBinPointPosition))
+
+  val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
+
+  // IO
+  val io: LogIO[T] = IO(new LogIO(params))
+  private val A = io.in.bits
 
   // Generate Look Up Table, LUT contains value log2(1 + f)
   private val logLUT = VecInit({
@@ -49,7 +50,7 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
       DspContext.withTrimType(Convergent) {
         lookupWire := lookupWire.cloneType.fromDoubleWithFixedWidth(log2(1 + n.toDouble / sizeLUT))
       }
-      lookupWire
+      lookupWire.asUInt(logBinPointPosition - 1,0)
     })
     LUT
   })
@@ -57,24 +58,29 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   // Find the location of most significant bit that is equal to one
   private val log2A = Log2(A.asUInt)
   // Calculate k
-  private val k = Wire(SInt((inputWidth - inputBinPointPosition).W))
+  private val k = Wire(SInt((log2Ceil(inputBinPointPosition) + 1).W))
   k :=
-    (log2A.asTypeOf(UInt((inputWidth - inputBinPointPosition).W)) -
-    inputBinPointPosition.U.asTypeOf(UInt((inputWidth - inputBinPointPosition).W))).asTypeOf(k)
-
+    (log2A.asTypeOf(UInt((log2Ceil(inputBinPointPosition) + 1).W)) -
+    inputBinPointPosition.U.asTypeOf(UInt((log2Ceil(inputBinPointPosition) + 1).W))).asTypeOf(k)
+  dontTouch(k)
+  k.suggestName("k")
   // Calculate LUT address
   private val address =
     BinaryRepresentation[UInt].shr(Cat(A.asUInt, 0.U(params.lutTableSize.W)), log2A)(params.lutTableSize - 1, 0)
 
   // Get LUT value
-  private val logFraction = Wire(FixedPoint(logWidth.W, logBinPointPosition.BP))
+  private val logFraction = Wire(UInt(logBinPointPosition.W))
   logFraction := logLUT(address)
 
   // out = k + logFraction
   private val log2MagBinPoint: Int = max(outputBinPointPosition, logBinPointPosition)
-  private val log2MagWidth: Int = outputWidth - outputBinPointPosition + log2MagBinPoint
-  private val log2Mag = Wire(FixedPoint(log2MagWidth.W, log2MagBinPoint.BP))
-  log2Mag := k.asFixedPoint(0.BP)  + logFraction
+  private val log2MagWidth: Int = k.getWidth + log2MagBinPoint
+  private val log2Mag =
+    if (outputBinPointPosition > logBinPointPosition) {
+      Cat(Cat(k, logFraction), 0.U((outputBinPointPosition - logBinPointPosition).W)).asTypeOf(FixedPoint(log2MagWidth.W, log2MagBinPoint.BP))
+    } else {
+      Cat(k, logFraction).asTypeOf(FixedPoint(log2MagWidth.W, log2MagBinPoint.BP))
+    }
   // Optional pipe register
   private val r_log2Mag = if (params.addPipeRegs) Some(Reg(log2Mag.cloneType)) else None
 
@@ -113,7 +119,6 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     io.o_last    := io.i_last
   }
 }
-
 
 object MagnitudeLogApp extends App {
   val params = LogMagnitudeParams[FixedPoint](

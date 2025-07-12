@@ -19,16 +19,20 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
 
-  // Input binary points
+  // Data widths
+  val inputWidth: Int = params.inputType.getWidth / 2
+  val outputWidth: Int = params.outputType.getWidth
+  // Data binary points
   val inputBinPoint = params.inputType.real match {
     case data: FixedPoint => data.binaryPoint.get
     case _ => 0
   }
-  // Output binary points
   val outputBinPoint = params.outputType match {
     case data: FixedPoint => data.binaryPoint.get
     case _ => 0
   }
+  // Requirement for correct result
+  require((outputWidth - outputBinPoint) >= (inputWidth - inputBinPoint + 2))
 
   // IO
   val io: LogMagnitudeIO[T] = IO(new LogMagnitudeIO(params))

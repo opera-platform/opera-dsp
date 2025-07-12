@@ -12,27 +12,34 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
   val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
   val mulPipeRegs: Int = if (params.mulPipeRegs) 1 else 0
 
+  // Data widths
+  val inputWidth : Int = params.inputType.getWidth / 2
+  val outputWidth: Int = params.outputType.getWidth
+  // Data binary points
+  val inputBinPoint = params.inputType.real match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+  val outputBinPoint = params.outputType match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+  // Requirement for correct result
+  require((outputWidth - outputBinPoint) >= (2*(inputWidth - inputBinPoint) + 1))
+
   // IO
   val io: LogMagnitudeIO[T] = IO(new LogMagnitudeIO(params))
 
   // Get I (real) and Q (imaginary) absolute values
-  val I: T = io.in.bits.real
-  val Q: T = io.in.bits.imag
+  private val I: SInt = io.in.bits.real.asTypeOf(SInt(inputWidth.W))
+  private val Q: SInt = io.in.bits.imag.asTypeOf(SInt(inputWidth.W))
 
   // I*I
-  private val squareI = DspContext.alter(DspContext.current.copy(
-    binaryPointGrowth = params.binaryGrowth, trimType = params.trimType
-  )) {
-    I.context_*(I)
-  }
+  private val squareI = (I * I).asTypeOf(FixedPoint((2*inputWidth).W, (2*inputBinPoint).BP))
   private val r_squareI = if (params.mulPipeRegs) Some(Reg(squareI.cloneType)) else None
 
   // Q*Q
-  private val squareQ = DspContext.alter(DspContext.current.copy(
-    binaryPointGrowth = params.binaryGrowth, trimType = params.trimType
-  )) {
-    Q.context_*(Q)
-  }
+  private val squareQ = (Q * Q).asTypeOf(FixedPoint((2*inputWidth).W, (2*inputBinPoint).BP))
   private val r_squareQ = if (params.mulPipeRegs) Some(Reg(squareQ.cloneType)) else None
 
   // I*I + Q*Q
@@ -46,14 +53,10 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
   }
   private val r_sumSquares = if (params.addPipeRegs) Some(Reg(sumSquares.cloneType)) else None
 
-  private val A =
-    if (params.addPipeRegs)
-      r_sumSquares.get
-    else
-      sumSquares
+  private val A = if (params.addPipeRegs) r_sumSquares.get else sumSquares
 
   // Calculate the number of bits that needs to be trimmed
-  private val trimBits = if ((A.getWidth - params.outputType.getWidth) > 0) A.getWidth - params.outputType.getWidth else 0
+  private val trimBits = if ((A.binaryPoint.get - outputBinPoint) > 0) A.binaryPoint.get - outputBinPoint else 0
 
   private val trimA = DspContext.alter(DspContext.current.copy(
     binaryPointGrowth = 0, trimType = params.trimType
