@@ -8,26 +8,42 @@ import fixedpoint._
 import opera.common.StringUtils.formatStringBinary
 import opera.common.{ArithmeticUtils, SignalUtils}
 
+import scala.math.BigDecimal.double2bigDecimal
 import scala.util.Random
 
-class MagnitudeSquaredTester(
-  dut        : MagnitudeSquared[FixedPoint],
+class MagnitudeMuxedTester(
+  dut        : MagnitudeMuxed[FixedPoint],
   params     : LogMagnitudeParams[FixedPoint],
   sampleSize : Int,
+  select     : Int,
   verbose    : Boolean = true,
   random     : Boolean = true,
   dataRandom : Boolean = true
 ) extends PeekPokeTester(dut) with TestUtils with SignalUtils {
 
-  // Data widths
+  // Input data width
   val inputWidth: Int = params.inputType.getWidth / 2
+  // Output data width
   val outputWidth: Int = params.outputType.getWidth
+  // Log Input data width
+  val logInputWidth: Int = params.realType.get.getWidth
 
-  // Data binary points
+  // Input binary points
   val inputBinPoint = params.inputType match {
     case data: DspComplex[FixedPoint] => data.real.binaryPoint.get
     case _ => 0
   }
+  // Log Input binary points
+  val logInputBinPoint = params.realType match {
+    case data: Some[FixedPoint] => data.get.binaryPoint.get
+    case _ => 0
+  }
+  // Log binary points
+  val logBinPoint = params.logType match {
+    case data: Some[FixedPoint] => data.get.binaryPoint.get
+    case _ => 0
+  }
+  // Output binary points
   val outputBinPoint = params.outputType match {
     case data: FixedPoint => data.binaryPoint.get
     case _ => 0
@@ -44,18 +60,51 @@ class MagnitudeSquaredTester(
 
   // Convert complex data to Seq[BigInt]
   val inDataComplex: Seq[(BigInt, BigInt)] = complexToAXI4StreamSequence(inData, inputWidth).map { data =>
-    val real = ArithmeticUtils.toSignedNBits(data >> inputWidth, inputWidth)
-    val imag = ArithmeticUtils.toSignedNBits(data & ((1 << inputWidth) - 1), inputWidth)
+    val real = ArithmeticUtils.toSignedNBits(data.toLong >> inputWidth, inputWidth)
+    val imag = ArithmeticUtils.toSignedNBits(data.toLong & ((1 << inputWidth) - 1), inputWidth)
     (real, imag)
   }
 
   // Calculate reference value
-  val expectedData: Seq[BigInt] = inDataComplex.map {case (real, imag) =>
-    squareModel(real.toLong, imag.toLong, inputBinPoint, outputBinPoint, params.trimType)
+  val expectedData: Seq[BigInt] = inDataComplex.map { case (real, imag) =>
+    // JPL model
+    val jpl = jplModel(
+      real           = real.toLong,
+      imag           = imag.toLong,
+      inputBinPoint  = inputBinPoint,
+      outputBinPoint = if (params.magType == LogJPLSquared) logInputBinPoint else outputBinPoint,
+      trimType       = params.trimType
+    )
+
+    // Square model depends on the position of MagnitudeSquare in the Magnitude Chain
+    val squared = squareModel(
+        real           = real.toLong,
+        imag           = imag.toLong,
+        inputBinPoint  = inputBinPoint,
+        outputBinPoint = if (params.magType == LogJPLSquared) outputBinPoint else logInputBinPoint,
+        trimType       = params.trimType
+      )
+    // Log Model depends on the Magnitude type
+    val logDouble = logModel(
+      data           = if (params.magType == LogJPLSquared) jpl else squared,
+      inputBinPoint  = inputBinPoint,
+      logBinPoint    = logBinPoint,
+      outputBinPoint = outputBinPoint,
+      lutTableSize   = params.lutTableSize,
+      trimType       = params.trimType
+    )
+    val log = (logDouble * scala.math.pow(2, outputBinPoint)).toBigInt
+    // Expected output depends on select value and Magnitude type
+    if (select == 1) {
+      log
+    } else {
+      if (params.magType == LogJPLSquared) squared else jpl
+    }
   }
 
-  // Reset DeCoupled nodes
+  // Reset values
   step(1)
+  poke(dut.io.sel.get , select)
   poke(dut.io.in.valid , false.B)
   poke(dut.io.out.ready, false.B)
   step(1)
@@ -125,9 +174,7 @@ class MagnitudeSquaredTester(
       )
       read_counter = read_counter + 1
     }
-
-    peek(dut.io.out.bits)
     step(1)
   }
-  step(5)
+  step(20)
 }

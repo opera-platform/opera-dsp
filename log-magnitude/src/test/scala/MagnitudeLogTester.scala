@@ -1,18 +1,14 @@
 package opera.logmagnitude
 
-import breeze.math.Complex
-import breeze.numerics.log
 import chisel3._
 import chiseltest.iotesters.PeekPokeTester
-import dsptools.numbers.DspComplex
 import fixedpoint._
+import opera.common.SignalUtils
 import opera.common.StringUtils.formatStringBinary
-import opera.common.{ArithmeticUtils, SignalUtils}
 
 import scala.math.BigDecimal.double2bigDecimal
 import scala.util.Random
 
-// TODO: Log model napravi!
 class MagnitudeLogTester(
   dut        : MagnitudeLog[FixedPoint],
   params     : LogMagnitudeParams[FixedPoint],
@@ -55,29 +51,7 @@ class MagnitudeLogTester(
 
   // Calculate reference value
   val expectedData: Seq[Double] = inData.map { m =>
-    val log2 =
-      if (m == 0)
-        -inputBinPoint
-      else {
-        val leadingOne = m.bitLength - 1
-        val cropBits = leadingOne - params.lutTableSize
-        val mCropped = if (cropBits > 0)  {
-          val mask = ~((BigInt(1) << cropBits) - 1)
-          m & mask
-        }
-        else m
-        log(mCropped.toDouble / scala.math.pow(2, inputBinPoint)) / log(2)
-      }
-
-    val log2scaled = log2 * scala.math.pow(2, logBinPoint)
-    val log2rounded = ArithmeticUtils.roundWithMode(log2scaled, params.trimType).toBigInt
-    if (logBinPoint < inputBinPoint)
-      log2rounded.toDouble / scala.math.pow(2, logBinPoint)
-    else {
-      val scaled = log2rounded.toDouble / scala.math.pow(2, logBinPoint - inputBinPoint)
-      val rounded = ArithmeticUtils.roundWithMode(scaled, params.trimType).toBigInt
-      rounded.toDouble * scala.math.pow(2, logBinPoint - inputBinPoint) / scala.math.pow(2, logBinPoint)
-    }
+    logModel(m, inputBinPoint, logBinPoint, outputBinPoint, params.lutTableSize, params.trimType)
   }
 
   // Reset DeCoupled nodes
@@ -93,6 +67,7 @@ class MagnitudeLogTester(
   var read_counter  = 0
   var write_counter = 0
   var peekedValue: BigInt = 0
+  var peekedLast: BigInt = false
 
   while (read_counter < sampleSize) {
     // Randomize ready
@@ -101,13 +76,16 @@ class MagnitudeLogTester(
     // Write input data
     if (peek(dut.io.in.valid) == 1 && peek(dut.io.in.ready) == 1 && write_counter < inData.length) {
       poke(dut.io.in.bits.asSInt, inData(write_counter))
+      if (write_counter == sampleSize - 1) poke(dut.io.i_last, true.B) else poke(dut.io.i_last, false.B)
       write_counter = write_counter + 1
     }
     // Check output data
     if (peek(dut.io.out.valid) == 1 && peek(dut.io.out.ready) == 1) {
       peekedValue = peek(dut.io.out.bits).head
-      // Expected value
-      val expected = expectedData(read_counter)
+      peekedLast = peek(dut.io.o_last)
+      // Expected values
+      val expected = (expectedData(read_counter) * scala.math.pow(2, outputBinPoint)).toBigInt
+      val expectedLast = if (read_counter == sampleSize - 1) BigInt(1) else BigInt(0)
 
       // Print if enabled
       if (verbose) {
@@ -116,18 +94,25 @@ class MagnitudeLogTester(
         print(
           f"input binary: " +
           f"${formatStringBinary(in >> inputBinPoint, inputWidth - inputBinPoint)}." +
-          f"${formatStringBinary(in & ((1 << inputBinPoint) - 1), inputBinPoint)}, "
+          f"${formatStringBinary(in & ((1 << inputBinPoint) - 1), inputBinPoint)} = "
         )
-        print(f"input float: ${in.toDouble / scala.math.pow(2, inputBinPoint) }%18.14f, ")
-        print(f"peeked data: ${1.0 * peekedValue.toLong / scala.math.pow(2, outputBinPoint)}%18.14f, ")
-        print(f"expected data: $expected%18.14f.\n")
+        print(f"${in.toDouble / scala.math.pow(2, inputBinPoint)}%18.15f, ")
+        print(f"peeked data: ")
+        print(f"${peekedValue.toDouble / scala.math.pow(2, outputBinPoint)}%18.15f, ")
+        print(f"expected data: ${expected.toDouble / scala.math.pow(2, outputBinPoint)}%18.15f.\n")
       }
       // Check results
       require(
-        (expected * scala.math.pow(2, outputBinPoint)).toBigInt == peekedValue,
+        expected == peekedValue,
         f"[0x$read_counter%04X] Expected and received data are different.\n" +
-          f"\texpected: ${(expected * scala.math.pow(2, outputBinPoint)).toBigInt}, " +
+          f"\texpected: $expected, " +
           f"\treceived: $peekedValue\n"
+      )
+      require(
+        expectedLast == peekedLast,
+        f"[0x$read_counter%04X] Expected and received last signals are different.\n" +
+          f"\texpected: $expectedLast, " +
+          f"\treceived: $peekedLast\n"
       )
       read_counter = read_counter + 1
     }
@@ -135,6 +120,5 @@ class MagnitudeLogTester(
     peek(dut.io.out.bits)
     step(1)
   }
-
-  step(20)
+  step(5)
 }

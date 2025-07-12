@@ -8,55 +8,57 @@ import org.chipsalliance.cde.config.Parameters
 import org.scalatest.flatspec.AnyFlatSpec
 
 class MagnitudeSquaredSpec extends AnyFlatSpec with ChiselScalatestTester {
-  behavior of "Magnitude"
+  behavior of "MagnitudeSquared"
 
   implicit val p: Parameters = Parameters.empty
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
-  val beatBytes   = 4
-  val sampleSize  = 1024
+  val sampleSize  = 256
   val verbose     = true
   val random      = true
-  val inputWidth  = 16
-  val binaryPoint = 10
+  val dataRandom  = true
 
   for (magType <- Seq(Squared)) {
     for (addPipeRegs <- Seq(false, true)) {
       for (mulPipeRegs <- Seq(false, true)) {
-        for (binaryGrowth <- Seq(binaryPoint)) {
-          for (binaryPoint <- Seq(binaryPoint)) {
-            for (binaryPointDiff <- Seq(0, 2, 4)) {
-              // Parameters
-              val outputWidth = inputWidth + (inputWidth - binaryPoint) + binaryPointDiff + 1
-              val params     = LogMagnitudeParams[FixedPoint](
-                inputType    = DspComplex(FixedPoint(inputWidth.W, binaryPoint.BP)),
-                outputType   = FixedPoint(outputWidth.W, (binaryPoint + binaryPointDiff).BP),
-                magType      = magType,
-                addPipeRegs  = addPipeRegs,
-                mulPipeRegs  = mulPipeRegs,
-                binaryGrowth = binaryGrowth,
-                trimType     = Convergent
-              )
+        for (inBinaryPoint <- Seq(6, 10, 14)) {
+          for (outBinaryPoint <- Seq(6, 10, 14)) {
+            for (inWholePart <- Seq(2, 3, 4)) {
+              for (extendOut <- Seq(0, 1, 2)) {
+                val outWholePart = 2 * inWholePart + 1 + extendOut
+                // Parameters
+                val params = LogMagnitudeParams[FixedPoint](
+                  inputType    = DspComplex(FixedPoint((inWholePart + inBinaryPoint).W, inBinaryPoint.BP)),
+                  outputType   = FixedPoint((outWholePart + outBinaryPoint).W, outBinaryPoint.BP),
+                  magType      = magType,
+                  addPipeRegs  = addPipeRegs,
+                  mulPipeRegs  = mulPipeRegs,
+                  binaryGrowth = inBinaryPoint,
+                  trimType     = Convergent
+                )
 
-              it should "pass when: \n" +
-                s"\t\tmagType = $magType,\n" +
-                s"\t\taddPipeRegs     = $addPipeRegs,\n" +
-                s"\t\tmulPipeRegs     = $mulPipeRegs,\n" +
-                s"\t\tbinaryGrowth    = $binaryGrowth,\n" +
-                s"\t\tbinaryPoint     = $binaryPoint,\n" +
-                s"\t\tbinaryPointDiff = $binaryPointDiff\n" in {
+                it should "pass when: \n" +
+                  s"\t\tmagType        = $magType,\n" +
+                  s"\t\taddPipeRegs    = $addPipeRegs, \n" +
+                  s"\t\tmulPipeRegs    = $mulPipeRegs, \n" +
+                  s"\t\tinWholePart    = $inWholePart, \n" +
+                  s"\t\tinBinaryPoint  = $inBinaryPoint, \n" +
+                  s"\t\toutWholePart   = $outWholePart, \n" +
+                  s"\t\toutBinaryPoint = $outBinaryPoint \n" in {
 
-                test(new MagnitudeSquared[FixedPoint](params = params))
-                  .withAnnotations(annotations)
-                  .runPeekPoke(c =>
-                    new MagnitudeSquaredTester(
-                      dut = c,
-                      params = params,
-                      sampleSize = sampleSize,
-                      verbose = verbose,
-                      random = random
+                  test(new MagnitudeSquared[FixedPoint](params = params))
+                    .withAnnotations(annotations)
+                    .runPeekPoke(c =>
+                      new MagnitudeSquaredTester(
+                        dut        = c,
+                        params     = params,
+                        sampleSize = sampleSize,
+                        verbose    = verbose,
+                        random     = random,
+                        dataRandom = dataRandom
+                      )
                     )
-                  )
+                }
               }
             }
           }

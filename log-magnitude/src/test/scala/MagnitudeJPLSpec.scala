@@ -7,51 +7,51 @@ import fixedpoint._
 import org.chipsalliance.cde.config.Parameters
 import org.scalatest.flatspec.AnyFlatSpec
 
-class MagnitudeSpec extends AnyFlatSpec with ChiselScalatestTester {
-  behavior of "Magnitude"
+class MagnitudeJPLSpec extends AnyFlatSpec with ChiselScalatestTester {
+  behavior of "MagnitudeJPL"
 
   implicit val p: Parameters = Parameters.empty
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
-  val beatBytes  = 4
-  val sampleSize = 1024
+  val sampleSize = 256
   val verbose    = true
   val random     = true
+  val dataRandom = true
 
   for (magType <- Seq(JPL)) {
     for (addPipeRegs <- Seq(false, true)) {
-      for (mulPipeRegs <- Seq(false)) {
-        for (binaryGrowth <- Seq(0)) {
-          for (binaryPoint <- Seq(10, 12, 14)) {
-            for (binaryPointDiff <- Seq(0, 2, 4)) {
+      for (inBinaryPoint <- Seq(10, 12, 14)) {
+        for (outBinaryPoint <- Seq(10, 12, 14)) {
+          for (inWholePart <- Seq(2, 3, 4)) {
+            for (extendOut <- Seq(0, 1, 2)) {
+              val outputWholePart = inWholePart + 2 + extendOut
               // Parameters
-              val params     = LogMagnitudeParams[FixedPoint](
-                inputType    = DspComplex(FixedPoint(16.W, binaryPoint.BP)),
-                outputType   = FixedPoint((16 + binaryPointDiff).W, (binaryPoint + binaryPointDiff).BP),
-                magType      = magType,
-                addPipeRegs  = addPipeRegs,
-                mulPipeRegs  = mulPipeRegs,
-                binaryGrowth = binaryGrowth,
-                trimType     = Convergent
+              val params = LogMagnitudeParams[FixedPoint](
+                inputType   = DspComplex(FixedPoint((inWholePart + inBinaryPoint).W, inBinaryPoint.BP)),
+                outputType  = FixedPoint((outputWholePart + outBinaryPoint).W, outBinaryPoint.BP),
+                magType     = magType,
+                addPipeRegs = addPipeRegs,
+                trimType    = Convergent
               )
 
               it should "pass when: \n" +
-                s"\t\tmagType = $magType,\n" +
-                s"\t\taddPipeRegs     = $addPipeRegs,\n" +
-                s"\t\tmulPipeRegs     = $mulPipeRegs,\n" +
-                s"\t\tbinaryGrowth    = $binaryGrowth,\n" +
-                s"\t\tbinaryPoint     = $binaryPoint,\n" +
-                s"\t\tbinaryPointDiff = $binaryPointDiff\n" in {
+                s"\t\tmagType         = $magType, \n" +
+                s"\t\taddPipeRegs     = $addPipeRegs, \n" +
+                s"\t\tinWholePart     = $inWholePart, \n" +
+                s"\t\tinBinaryPoint   = $inBinaryPoint, \n" +
+                s"\t\toutputWholePart = $outputWholePart, \n" +
+                s"\t\toutBinaryPoint  = $outBinaryPoint \n " in {
 
                 test(new MagnitudeJPL[FixedPoint](params = params))
                   .withAnnotations(annotations)
                   .runPeekPoke(c =>
                     new MagnitudeJPLTester(
-                      dut = c,
-                      params = params,
+                      dut        = c,
+                      params     = params,
                       sampleSize = sampleSize,
-                      verbose = verbose,
-                      random = random
+                      verbose    = verbose,
+                      random     = random,
+                      dataRandom = dataRandom
                     )
                   )
               }
