@@ -7,6 +7,37 @@ import circt.stage.{ChiselStage, FirtoolOption}
 import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
+/**
+ * This module generates two variants of the hardware:
+ *
+ * magType = LogSquaredJPL block diagram:
+ *
+ * {{{
+ *                            +------------------+     +--------------+
+ *             sel=1     +--> | MagnitudeSquared | --> | MagnitudeLog | --+
+ *           +-------+   |    +------------------+     +--------------+   |     +-----+
+ *           |       | --+                                                + --> |     |
+ * Input --> | DeMux |                                                          | Mux | --> Output
+ *           |       | --+                                                + --> |     |
+ *           +-------+   |             +--------------+                   |     +-----+
+ *             sel=0     +-----------> | MagnitudeJPL | ------------------+
+ *                                     +--------------+
+ * }}}
+ *
+ * * magType = LogJPLSquared block diagram:
+ *
+ * {{{
+ *                                +--------------+     +--------------+
+ *             sel=1     +------> | MagnitudeJPL | --> | MagnitudeLog | --+
+ *           +-------+   |        +--------------+     +--------------+   |     +-----+
+ *           |       | --+                                                + --> |     |
+ * Input --> | DeMux |                                                          | Mux | --> Output
+ *           |       | --+                                                + --> |     |
+ *           +-------+   |             +------------------+               |     +-----+
+ *             sel=0     +-----------> | MagnitudeSquared | --------------+
+ *                                     +------------------+
+ * }}}
+ */
 class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   require(params.magType == LogJPLSquared || params.magType == LogSquaredJPL)
 
@@ -18,7 +49,6 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
     magType      = Squared,
     addPipeRegs  = params.addPipeRegs,
     mulPipeRegs  = params.mulPipeRegs,
-    binaryGrowth = params.binaryGrowth,
     trimType     = params.trimType
   )
 
@@ -30,7 +60,6 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
     magType      = JPL,
     addPipeRegs  = params.addPipeRegs,
     mulPipeRegs  = params.mulPipeRegs,
-    binaryGrowth = params.binaryGrowth,
     trimType     = params.trimType
   )
 
@@ -43,7 +72,6 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
     lutTableSize = params.lutTableSize,
     addPipeRegs  = params.addPipeRegs,
     mulPipeRegs  = params.mulPipeRegs,
-    binaryGrowth = params.binaryGrowth,
     trimType     = params.trimType
   )
 
@@ -116,7 +144,6 @@ object MagnitudeMuxedApp extends App {
     magType      = LogJPLSquared,
     addPipeRegs  = false,
     mulPipeRegs  = false,
-    binaryGrowth = 0,
     trimType     = Convergent
   )
 

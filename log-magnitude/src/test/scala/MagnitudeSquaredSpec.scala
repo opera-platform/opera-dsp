@@ -33,7 +33,6 @@ class MagnitudeSquaredSpec extends AnyFlatSpec with ChiselScalatestTester {
                   magType      = magType,
                   addPipeRegs  = addPipeRegs,
                   mulPipeRegs  = mulPipeRegs,
-                  binaryGrowth = inBinaryPoint,
                   trimType     = Convergent
                 )
 

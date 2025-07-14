@@ -41,7 +41,6 @@ class MagnitudeMuxedSpec extends AnyFlatSpec with ChiselScalatestTester {
                     magType      = magType,
                     addPipeRegs  = addPipeRegs,
                     mulPipeRegs  = false,
-                    binaryGrowth = inBinaryPoint,
                     trimType     = Convergent
                   )
 

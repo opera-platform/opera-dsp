@@ -8,6 +8,12 @@ import dsptools._
 import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
+/**
+ * Computes the magnitude squared.
+ *
+ * The calculation is defined as:
+ *    A = I * I + Q * Q
+ */
 class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
   val mulPipeRegs: Int = if (params.mulPipeRegs) 1 else 0
@@ -109,7 +115,6 @@ object MagnitudeSquaredApp extends App {
     magType      = Squared,
     addPipeRegs  = true,
     mulPipeRegs  = true,
-    binaryGrowth = 14,
     trimType     = Convergent
   )
 

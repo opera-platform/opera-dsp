@@ -16,6 +16,22 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 // X = max(|I|,|Q|)
 // Y = min(|I|,|Q|)
 // Paper: https://ipnpr.jpl.nasa.gov/progress_report/42-40/40L.PDF
+
+/**
+ * Jet Propulsion Laboratory magnitude approximation.
+ *
+ * The approximation is defined as:
+ *    A = X + Y/8 , for X >= 3Y
+ *    or
+ *    A = 7/8*X + 1/2*Y, for 3Y > X
+ *
+ * where:
+ * - X = max(|I|, |Q|)
+ * - Y = min(|I|, |Q|)
+ *
+ * Reference:
+ * `Paper <https://ipnpr.jpl.nasa.gov/progress_report/42-40/40L.PDF>`_
+ */
 class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   val addPipeRegs: Int = if (params.addPipeRegs) 1 else 0
 

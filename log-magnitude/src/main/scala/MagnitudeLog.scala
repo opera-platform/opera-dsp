@@ -9,9 +9,13 @@ import dsptools._
 import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
-// out = log(A)
-// N = 2^k * (1 + f)
-// log(N) = k + log2(1 + f)
+/**
+ * Calculates the Look-Up Table (LUT) based log2 approximation of the input data.
+ *
+ * The fractional part of the log2 value is stored in the LUT,
+ * while the integer (whole) part is determined based on the position
+ * of the most significant '1' bit in the input data.
+ */
 class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
   // Get data information
   private val logWidth = params.logType.get.getWidth
@@ -129,7 +133,6 @@ object MagnitudeLogApp extends App {
     logType      = Some(FixedPoint(16.W, 14.BP)),
     lutTableSize = 10,
     addPipeRegs  = false,
-    binaryGrowth = 0,
     trimType     = Convergent
   )
 
