@@ -9,14 +9,6 @@ import dsptools._
 import dsptools.numbers._
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
-// Jet Propulsion Laboratory magnitude approximation
-//     { 1.0 * X + 1/8 * Y;  X >= 3Y
-// A = {
-//     { 7/8 * X + 1/2 * Y;  X <= 3Y
-// X = max(|I|,|Q|)
-// Y = min(|I|,|Q|)
-// Paper: https://ipnpr.jpl.nasa.gov/progress_report/42-40/40L.PDF
-
 /**
  * Jet Propulsion Laboratory magnitude approximation.
  *
@@ -76,7 +68,6 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   }.otherwise {
     x_ge_y3 := false.B
   }
-
 
   // geA = 1.0 * X + 1/8 * Y;  X >= 3Y
   // Align geA (greater or equal A) with leA (less or equal A)
