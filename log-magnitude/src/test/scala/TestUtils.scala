@@ -19,10 +19,10 @@ trait TestUtils {
    val geA = x + (y >> 3)
    // We want to avoid multiplication 7/8 * X. So we will instead subtract 1/8*X from X
    val x_7_8 = x - (x >> 3)
-   // A= 7/8 * X + 1/2 * Y;  X <= 3Y
+   // A = 7/8 * X + 1/2 * Y;  X <= 3Y
    val leA = x_7_8 + (y >> 1)
-   val A = max(geA, leA)
    // Scale and round if necessary
+   val A = if (x >= 3*y) geA else leA
    if (inputBinPoint > outputBinPoint) {
      val scaled = A.toDouble / scala.math.pow(2, inputBinPoint - outputBinPoint)
      ArithmeticUtils.roundWithMode(scaled, trimType).toBigInt

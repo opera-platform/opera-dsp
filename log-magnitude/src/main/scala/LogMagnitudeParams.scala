@@ -26,13 +26,13 @@ case object LogSquaredJPL extends MagType
  * @param trimType     Specifies the trimming strategy applied after arithmetic operations.
  */
 case class LogMagnitudeParams[T <: Data](
-  inputType   : DspComplex[T],    // Input data type (Complex data)
-  realType    : Option[T] = None, // Input real data type. Only relevant for MagnitudeLog
-  outputType  : T,                // Output data type
-  logType     : Option[T] = None, // Look Up Table data type. Only relevant for MagnitudeLog
-  magType     : MagType = JPL,    // Parameter to select magnitude type
-  lutTableSize: Int = 16,         // Look Up Table size: LUT size = 2^lutTableSize. Only relevant for MagnitudeLog
-  addPipeRegs : Boolean = false,  // Enable Pipeline Registers after addition
-  mulPipeRegs : Boolean = false,  // Enable Pipeline Registers after multiplication
-  trimType    : TrimType          // TrimType to used after arithmetic operations
+  inputType   : DspComplex[T],
+  realType    : Option[T] = None,
+  outputType  : T,
+  logType     : Option[T] = None,
+  magType     : MagType = JPL,
+  lutTableSize: Int = 16,
+  addPipeRegs : Boolean = false,
+  mulPipeRegs : Boolean = false,
+  trimType    : TrimType
 )

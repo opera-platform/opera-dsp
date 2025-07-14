@@ -67,6 +67,17 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     y:= absI
   }
 
+  // Check condition X >= 3Y
+  private val y3: UInt = y +& (y << 1).asUInt
+  private val x_ge_y3 = Wire(Bool())
+  private val r_x_ge_y3: Option[Vec[Bool]] = if (params.addPipeRegs) Some(Reg(Vec(2 * addPipeRegs, x_ge_y3.cloneType))) else None
+  when(x >= y3) {
+    x_ge_y3 := true.B
+  }.otherwise {
+    x_ge_y3 := false.B
+  }
+
+
   // geA = 1.0 * X + 1/8 * Y;  X >= 3Y
   // Align geA (greater or equal A) with leA (less or equal A)
   val geA: UInt = x +& (y >> 3).asUInt
@@ -86,13 +97,13 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
 
   private val A = Wire(UInt(max(geA.getWidth,leA.getWidth).W))
     if (params.addPipeRegs) {
-      when(r_geA.get.last > r_leA.get.last) {
+      when(r_x_ge_y3.get.last) {
         A := r_geA.get.last.zext.asUInt
       }. otherwise {
         A := r_leA.get.last.zext.asUInt
       }
     } else {
-      when(geA > leA) {
+      when(x_ge_y3) {
         A := geA.zext.asUInt
       }.otherwise {
         A := leA.zext.asUInt
@@ -115,14 +126,16 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     for (i <- 0 until 2 * addPipeRegs) {
       when(handshake._1(i)) {
         if (i == 0) {
-          r_last(i)        := io.i_last
-          r_geA.get(i)     := geA
-          r_x_7_8.get.head := x_7_8
+          r_last(i)          := io.i_last
+          r_geA.get(i)       := geA
+          r_x_7_8.get.head   := x_7_8
+          r_x_ge_y3.get.head := x_ge_y3
         }
         else {
-          r_last(i)      := r_last(i-1)
-          r_geA.get(i)   := r_geA.get(i-1)
-          r_leA.get.head := leA
+          r_last(i)        := r_last(i-1)
+          r_geA.get(i)     := r_geA.get(i-1)
+          r_leA.get.head   := leA
+          r_x_ge_y3.get(i) := r_x_ge_y3.get(i-1)
         }
       }
     }
