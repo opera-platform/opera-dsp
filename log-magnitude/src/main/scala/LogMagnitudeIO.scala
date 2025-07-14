@@ -9,7 +9,7 @@ class LogMagnitudeIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends
   val out: DecoupledIO[T] = Decoupled(params.outputType)
   val i_last: Bool = Input(Bool())
   val o_last: Bool = Output(Bool())
-  val sel: Option[Bool] = if (params.magType == LogSquaredJPL || params.magType == LogJPLSquared) Some(Input(Bool())) else None
+  val i_sel: Option[Bool] = if (params.magType == LogSquaredJPL || params.magType == LogJPLSquared) Some(Input(Bool())) else None
 }
 
 class LogIO[T <: Data: Real](val params: LogMagnitudeParams[T]) extends Bundle {

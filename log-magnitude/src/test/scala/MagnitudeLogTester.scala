@@ -18,24 +18,16 @@ class MagnitudeLogTester(
   dataRandom : Boolean = true
 ) extends PeekPokeTester(dut) with TestUtils with SignalUtils {
 
-  // Input data width
+  // Data widths
   val inputWidth: Int = params.realType.get.getWidth
-  // Output data width
   val outputWidth: Int = params.outputType.getWidth
+  val lutTableWidth: Int = params.lutTableWidth.get
 
-  // Input binary points
+  // Data binary points
   val inputBinPoint = params.realType match {
     case data: Some[FixedPoint]=> data.get.binaryPoint.get
     case _ => 0
   }
-
-  // Log binary points
-  val logBinPoint = params.logType match {
-    case data: Some[FixedPoint] => data.get.binaryPoint.get
-    case _ => 0
-  }
-
-  // Output binary points
   val outputBinPoint = params.outputType match {
     case data: FixedPoint => data.binaryPoint.get
     case _ => 0
@@ -51,7 +43,7 @@ class MagnitudeLogTester(
 
   // Calculate reference value
   val expectedData: Seq[Double] = inData.map { m =>
-    logModel(m, inputBinPoint, logBinPoint, outputBinPoint, params.lutTableSize, params.trimType)
+    logModel(m, inputBinPoint, lutTableWidth, outputBinPoint, params.lutTableSize, params.trimType)
   }
 
   // Reset DeCoupled nodes

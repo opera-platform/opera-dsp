@@ -26,22 +26,22 @@ class MagnitudeMuxedSpec extends AnyFlatSpec with ChiselScalatestTester {
         for (lutTableSize <- Seq(4, 6, 8)) {
           for (inBinaryPoint <- Seq(6, 10, 14)) {
             for (outBinaryPoint <- Seq(6, 10, 14)) {
-              for (logBinaryPoint <- Seq(8, 10, 14)) {
+              for (lutTableWidth <- Seq(8, 10, 14)) {
                 for (select <- Seq(0, 1)) {
                   val inputWholePart = 2
                   val realWholePart = max(2 * inputWholePart + 1, log2Ceil(inBinaryPoint) + 1)
                   val outputWholePart = 2 * realWholePart + 1
                   // Parameters
                   val params = LogMagnitudeParams[FixedPoint](
-                    inputType    = DspComplex(FixedPoint((inputWholePart + inBinaryPoint).W, inBinaryPoint.BP)),
-                    realType     = Some(FixedPoint((realWholePart + inBinaryPoint).W, inBinaryPoint.BP)),
-                    outputType   = FixedPoint((outputWholePart + outBinaryPoint).W, outBinaryPoint.BP),
-                    logType      = Some(FixedPoint((logBinaryPoint + 2).W, logBinaryPoint.BP)),
-                    lutTableSize = lutTableSize,
-                    magType      = magType,
-                    addPipeRegs  = addPipeRegs,
-                    mulPipeRegs  = false,
-                    trimType     = Convergent
+                    inputType     = DspComplex(FixedPoint((inputWholePart + inBinaryPoint).W, inBinaryPoint.BP)),
+                    realType      = Some(FixedPoint((realWholePart + inBinaryPoint).W, inBinaryPoint.BP)),
+                    outputType    = FixedPoint((outputWholePart + outBinaryPoint).W, outBinaryPoint.BP),
+                    lutTableSize  = lutTableSize,
+                    lutTableWidth = Some(lutTableWidth),
+                    magType       = magType,
+                    addPipeRegs   = addPipeRegs,
+                    mulPipeRegs   = false,
+                    trimType      = Convergent
                   )
 
                   it should "pass when: \n" +
@@ -49,8 +49,8 @@ class MagnitudeMuxedSpec extends AnyFlatSpec with ChiselScalatestTester {
                     s"\t\taddPipeRegs     = $addPipeRegs, \n" +
                     s"\t\tmulPipeRegs     = $mulPipeRegs, \n" +
                     s"\t\tlutTableSize    = $lutTableSize, \n" +
+                    s"\t\tlutTableWidth   = $lutTableWidth, \n" +
                     s"\t\tinBinaryPoint   = $inBinaryPoint, \n" +
-                    s"\t\tlogBinaryPoint  = $logBinaryPoint, \n" +
                     s"\t\toutBinaryPoint  = $outBinaryPoint, \n" +
                     s"\t\tselect          = $select \n" in {
 
@@ -58,12 +58,12 @@ class MagnitudeMuxedSpec extends AnyFlatSpec with ChiselScalatestTester {
                       .withAnnotations(annotations)
                       .runPeekPoke(c =>
                         new MagnitudeMuxedTester(
-                          dut = c,
-                          params = params,
+                          dut        = c,
+                          params     = params,
                           sampleSize = sampleSize,
-                          select = select,
-                          verbose = verbose,
-                          random = random,
+                          select     = select,
+                          verbose    = verbose,
+                          random     = random,
                           dataRandom = dataRandom
                         )
                       )

@@ -144,7 +144,7 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
 object MagnitudeJPLApp extends App {
   val params = LogMagnitudeParams[FixedPoint](
     inputType    = DspComplex(FixedPoint(16.W, 14.BP)),
-    outputType   = FixedPoint(16.W, 14.BP),
+    outputType   = FixedPoint(20.W, 14.BP),
     magType      = JPL,
     addPipeRegs  = false,
     trimType     = Convergent

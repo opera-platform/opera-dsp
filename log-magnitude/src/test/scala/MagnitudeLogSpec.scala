@@ -24,20 +24,20 @@ class MagnitudeLogSpec extends AnyFlatSpec with ChiselScalatestTester {
       for (lutTableSize <- Seq(4, 8)) {
         for (outBinaryPoint <- Seq(8, 10, 12)) {
           for (inputBinaryPoint <- Seq(8, 10, 12)) {
-            for (logBinaryPoint <- Seq(8, 10, 12)) {
+            for (lutTableWidth <- Seq(8, 10, 12)) {
               for (inputWholePart <- Seq(2, 3, 4)) {
                 for (extendOut <- Seq(0, 1, 2)) {
                   val outputWholePart = log2Ceil(inputBinaryPoint) + 1 + extendOut
                   // Parameters
                   val params = LogMagnitudeParams[FixedPoint](
-                    inputType    = DspComplex(FixedPoint(16.W, 0.BP)), // This doesn't matter for Log
-                    realType     = Some(FixedPoint((inputWholePart + inputBinaryPoint).W, inputBinaryPoint.BP)),
-                    outputType   = FixedPoint((outputWholePart + outBinaryPoint).W, outBinaryPoint.BP),
-                    logType      = Some(FixedPoint((logBinaryPoint + 2).W, logBinaryPoint.BP)),
-                    lutTableSize = lutTableSize,
-                    magType      = magType,
-                    addPipeRegs  = addPipeRegs,
-                    trimType     = Convergent
+                    inputType     = DspComplex(FixedPoint(16.W, 0.BP)), // This doesn't matter for Log
+                    realType      = Some(FixedPoint((inputWholePart + inputBinaryPoint).W, inputBinaryPoint.BP)),
+                    outputType    = FixedPoint((outputWholePart + outBinaryPoint).W, outBinaryPoint.BP),
+                    lutTableSize  = lutTableSize,
+                    lutTableWidth = Some(lutTableWidth),
+                    magType       = magType,
+                    addPipeRegs   = addPipeRegs,
+                    trimType      = Convergent
                   )
 
                   it should "pass when: \n" +
@@ -48,7 +48,7 @@ class MagnitudeLogSpec extends AnyFlatSpec with ChiselScalatestTester {
                     s"\t\toutBinaryPoint   = $outBinaryPoint, \n" +
                     s"\t\tinputWholePart   = $inputWholePart, \n" +
                     s"\t\tinputBinaryPoint = $inputBinaryPoint, \n" +
-                    s"\t\tlogBinaryPoint   = $logBinaryPoint \n" in {
+                    s"\t\tlutTableWidth    = $lutTableWidth \n" in {
 
                     test(new MagnitudeLog[FixedPoint](params = params))
                       .withAnnotations(annotations)

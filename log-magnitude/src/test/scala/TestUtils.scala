@@ -49,11 +49,11 @@ trait TestUtils {
     out
   }
 
-  def logModel(data: BigInt, inputBinPoint: Int, logBinPoint: Int, outputBinPoint: Int, lutTableSize: Int, trimType: TrimType): Double = {
+  def logModel(data: BigInt, inputBinPoint: Int, lutTableWidth: Int, outputBinPoint: Int, lutTableSize: Int, trimType: TrimType): Double = {
     val log2 =
-      if (data == 0)
+      if (data == 0) {
         -inputBinPoint
-      else {
+      } else {
         val leadingOne = data.bitLength - 1
         val cropBits = leadingOne - lutTableSize
         val mCropped = if (cropBits > 0) {
@@ -64,14 +64,14 @@ trait TestUtils {
         log(mCropped.toDouble / scala.math.pow(2, inputBinPoint)) / log(2)
       }
 
-    val log2scaled = log2 * scala.math.pow(2, logBinPoint)
+    val log2scaled = log2 * scala.math.pow(2, lutTableWidth)
     val log2rounded = ArithmeticUtils.roundWithMode(log2scaled, trimType).toBigInt
-    if (logBinPoint < outputBinPoint)
-      log2rounded.toDouble / scala.math.pow(2, logBinPoint)
+    if (lutTableWidth < outputBinPoint)
+      log2rounded.toDouble / scala.math.pow(2, lutTableWidth)
     else {
-      val scaled = log2rounded.toDouble / scala.math.pow(2, logBinPoint - outputBinPoint)
+      val scaled = log2rounded.toDouble / scala.math.pow(2, lutTableWidth - outputBinPoint)
       val rounded = ArithmeticUtils.roundWithMode(scaled, trimType).toBigInt
-      rounded.toDouble * scala.math.pow(2, logBinPoint - outputBinPoint) / scala.math.pow(2, logBinPoint)
+      rounded.toDouble * scala.math.pow(2, lutTableWidth - outputBinPoint) / scala.math.pow(2, lutTableWidth)
     }
   }
 }

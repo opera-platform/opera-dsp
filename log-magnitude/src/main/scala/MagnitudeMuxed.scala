@@ -14,13 +14,13 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
  *
  * {{{
  *                            +------------------+     +--------------+
- *             sel=1     +--> | MagnitudeSquared | --> | MagnitudeLog | --+
+ *            i_sel=1    +--> | MagnitudeSquared | --> | MagnitudeLog | --+     i_sel=1
  *           +-------+   |    +------------------+     +--------------+   |     +-----+
  *           |       | --+                                                + --> |     |
  * Input --> | DeMux |                                                          | Mux | --> Output
  *           |       | --+                                                + --> |     |
  *           +-------+   |             +--------------+                   |     +-----+
- *             sel=0     +-----------> | MagnitudeJPL | ------------------+
+ *            i_sel=0    +-----------> | MagnitudeJPL | ------------------+     i_sel=0
  *                                     +--------------+
  * }}}
  *
@@ -28,13 +28,13 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
  *
  * {{{
  *                                +--------------+     +--------------+
- *             sel=1     +------> | MagnitudeJPL | --> | MagnitudeLog | --+
+ *            i_sel=1    +------> | MagnitudeJPL | --> | MagnitudeLog | --+     i_sel=1
  *           +-------+   |        +--------------+     +--------------+   |     +-----+
  *           |       | --+                                                + --> |     |
  * Input --> | DeMux |                                                          | Mux | --> Output
  *           |       | --+                                                + --> |     |
  *           +-------+   |             +------------------+               |     +-----+
- *             sel=0     +-----------> | MagnitudeSquared | --------------+
+ *            i_sel=0    +-----------> | MagnitudeSquared | --------------+     i_sel=0
  *                                     +------------------+
  * }}}
  */
@@ -42,37 +42,33 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
   require(params.magType == LogJPLSquared || params.magType == LogSquaredJPL)
 
   private val squaredParameters = LogMagnitudeParams(
-    inputType    = params.inputType,
-    realType     = None,
-    outputType   = if (params.magType == LogSquaredJPL) params.realType.get else params.outputType,
-    logType      = None,
-    magType      = Squared,
-    addPipeRegs  = params.addPipeRegs,
-    mulPipeRegs  = params.mulPipeRegs,
-    trimType     = params.trimType
+    inputType   = params.inputType,
+    outputType  = if (params.magType == LogSquaredJPL) params.realType.get else params.outputType,
+    magType     = Squared,
+    addPipeRegs = params.addPipeRegs,
+    mulPipeRegs = params.mulPipeRegs,
+    trimType    = params.trimType
   )
 
   private val jplParameters = LogMagnitudeParams(
-    inputType    = params.inputType,
-    realType     = None,
-    outputType   = if (params.magType == LogJPLSquared) params.realType.get else params.outputType,
-    logType      = None,
-    magType      = JPL,
-    addPipeRegs  = params.addPipeRegs,
-    mulPipeRegs  = params.mulPipeRegs,
-    trimType     = params.trimType
+    inputType   = params.inputType,
+    outputType  = if (params.magType == LogJPLSquared) params.realType.get else params.outputType,
+    magType     = JPL,
+    addPipeRegs = params.addPipeRegs,
+    mulPipeRegs = params.mulPipeRegs,
+    trimType    = params.trimType
   )
 
   private val logParameters = LogMagnitudeParams(
-    inputType    = params.inputType,
-    realType     = params.realType,
-    outputType   = params.outputType,
-    logType      = params.logType,
-    magType      = Log,
-    lutTableSize = params.lutTableSize,
-    addPipeRegs  = params.addPipeRegs,
-    mulPipeRegs  = params.mulPipeRegs,
-    trimType     = params.trimType
+    inputType     = params.inputType,
+    realType      = params.realType,
+    outputType    = params.outputType,
+    magType       = Log,
+    lutTableSize  = params.lutTableSize,
+    lutTableWidth = params.lutTableWidth,
+    addPipeRegs   = params.addPipeRegs,
+    mulPipeRegs   = params.mulPipeRegs,
+    trimType      = params.trimType
   )
 
   // IO
@@ -86,7 +82,7 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
   if (params.magType == LogJPLSquared) {
     magLog.io.in <> magJPL.io.out
     magLog.io.i_last := magJPL.io.o_last
-    when(io.sel.get) {
+    when(io.i_sel.get) {
       io.out <> magLog.io.out
       io.o_last := magLog.io.o_last
       magJPL.io.in <> io.in
@@ -110,7 +106,7 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
   } else {
     magLog.io.in <> magSquared.io.out
     magLog.io.i_last <> magSquared.io.o_last
-    when(io.sel.get) {
+    when(io.i_sel.get) {
       io.out <> magLog.io.out
       io.o_last := magLog.io.o_last
       magSquared.io.in <> io.in
@@ -134,17 +130,17 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
   }
 }
 
-
 object MagnitudeMuxedApp extends App {
   val params = LogMagnitudeParams[FixedPoint](
-    inputType    = DspComplex(FixedPoint(16.W, 14.BP)),
-    realType     = Some(FixedPoint(16.W, 14.BP)),
-    outputType   = FixedPoint(16.W, 14.BP),
-    logType      = Some(FixedPoint(16.W, 14.BP)),
-    magType      = LogJPLSquared,
-    addPipeRegs  = false,
-    mulPipeRegs  = false,
-    trimType     = Convergent
+    inputType     = DspComplex(FixedPoint(16.W, 14.BP)),
+    realType      = Some(FixedPoint(16.W, 14.BP)),
+    outputType    = FixedPoint(16.W, 14.BP),
+    magType       = LogJPLSquared,
+    lutTableSize  = 10,
+    lutTableWidth = Some(12),
+    addPipeRegs   = false,
+    mulPipeRegs   = false,
+    trimType      = Convergent
   )
 
   (new ChiselStage).execute(

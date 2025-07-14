@@ -104,9 +104,7 @@ class MagnitudeSquared[T <: Data: Real: BinaryRepresentation](val params: LogMag
     io.in.ready  := io.out.ready
     io.o_last    := io.i_last
   }
-
 }
-
 
 object MagnitudeSquaredApp extends App {
   val params = LogMagnitudeParams[FixedPoint](

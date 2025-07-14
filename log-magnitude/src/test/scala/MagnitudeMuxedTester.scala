@@ -21,29 +21,21 @@ class MagnitudeMuxedTester(
   dataRandom : Boolean = true
 ) extends PeekPokeTester(dut) with TestUtils with SignalUtils {
 
-  // Input data width
-  val inputWidth: Int = params.inputType.getWidth / 2
-  // Output data width
-  val outputWidth: Int = params.outputType.getWidth
-  // Log Input data width
+  // Data widths
+  val inputWidth   : Int = params.inputType.getWidth / 2
+  val outputWidth  : Int = params.outputType.getWidth
   val logInputWidth: Int = params.realType.get.getWidth
+  val lutTableWidth: Int = params.lutTableWidth.get
 
-  // Input binary points
+  // Data binary points
   val inputBinPoint = params.inputType match {
     case data: DspComplex[FixedPoint] => data.real.binaryPoint.get
     case _ => 0
   }
-  // Log Input binary points
   val logInputBinPoint = params.realType match {
     case data: Some[FixedPoint] => data.get.binaryPoint.get
     case _ => 0
   }
-  // Log binary points
-  val logBinPoint = params.logType match {
-    case data: Some[FixedPoint] => data.get.binaryPoint.get
-    case _ => 0
-  }
-  // Output binary points
   val outputBinPoint = params.outputType match {
     case data: FixedPoint => data.binaryPoint.get
     case _ => 0
@@ -88,7 +80,7 @@ class MagnitudeMuxedTester(
     val logDouble = logModel(
       data           = if (params.magType == LogJPLSquared) jpl else squared,
       inputBinPoint  = inputBinPoint,
-      logBinPoint    = logBinPoint,
+      lutTableWidth  = lutTableWidth,
       outputBinPoint = outputBinPoint,
       lutTableSize   = params.lutTableSize,
       trimType       = params.trimType
@@ -104,7 +96,7 @@ class MagnitudeMuxedTester(
 
   // Reset values
   step(1)
-  poke(dut.io.sel.get , select)
+  poke(dut.io.i_sel.get, select)
   poke(dut.io.in.valid , false.B)
   poke(dut.io.out.ready, false.B)
   step(1)
