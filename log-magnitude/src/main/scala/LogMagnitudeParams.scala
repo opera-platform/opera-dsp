@@ -1,8 +1,9 @@
 package opera.logmagnitude
 
-import chisel3.Data
+import chisel3.{Data, fromIntToWidth}
 import dsptools.TrimType
-import dsptools.numbers.DspComplex
+import dsptools.numbers.{Convergent, DspComplex}
+import fixedpoint._
 
 sealed trait MagType
 
@@ -36,3 +37,29 @@ case class LogMagnitudeParams[T <: Data](
   mulPipeRegs   : Boolean = false,
   trimType      : TrimType
 )
+
+object LogMagnitudeParams {
+  def fixed (
+    inputType: DspComplex[FixedPoint] = DspComplex(FixedPoint(16.W, 14.BP)),
+    realType: Option[FixedPoint] = None,
+    outputType: FixedPoint = FixedPoint(18.W, 14.BP),
+    magType: MagType = JPL,
+    lutTableSize: Int = 10,
+    lutTableWidth: Option[Int] = None,
+    addPipeRegs: Boolean = false,
+    mulPipeRegs: Boolean = false,
+    trimType: TrimType = Convergent
+  ): LogMagnitudeParams[FixedPoint] = {
+    LogMagnitudeParams(
+      inputType     = inputType,
+      realType      = realType,
+      outputType    = outputType,
+      lutTableSize  = lutTableSize,
+      lutTableWidth = lutTableWidth,
+      magType       = magType,
+      addPipeRegs   = addPipeRegs,
+      mulPipeRegs   = mulPipeRegs,
+      trimType      = trimType
+    )
+  }
+}

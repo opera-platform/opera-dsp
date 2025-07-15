@@ -43,14 +43,14 @@ trait StandaloneAXI4Block
   def dataBytes = 2
   def standaloneParams = AXI4BundleParameters(addrBits = 32, dataBits = 32, idBits = 1)
   // AXI4
-  val ioMem = mem.map {
+  val ioMem = if (mem.isDefined) mem.map {
     m => {
       val ioMemNode = BundleBridgeSource(() => AXI4Bundle(standaloneParams))
       m := BundleBridgeToAXI4(AXI4MasterPortParameters(Seq(AXI4MasterParameters("bundleBridgeToAXI4")))) := ioMemNode
       val ioMem = InModuleBody { ioMemNode.makeIO() }
       ioMem
     }
-  }
+  } else None
 
   // AXI4Stream nodes
   val ioInNode = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = dataBytes)))
@@ -88,14 +88,14 @@ trait StandaloneTLBlock
       responseFields = Seq(),
       hasBCE = false
     )
-  val ioMem = mem.map { m =>
-  {
-    val ioMemNode = BundleBridgeSource(() => TLBundle(standaloneParams))
-    m := BundleBridgeToTL(TLMasterPortParameters.v1(Seq(TLMasterParameters.v1("bundleBridgeToTL")))) := ioMemNode
-    val ioMem = InModuleBody { ioMemNode.makeIO() }
-    ioMem
-  }
-  }
+  val ioMem =  if (mem.isDefined) mem.map {
+    m => {
+      val ioMemNode = BundleBridgeSource(() => TLBundle(standaloneParams))
+      m := BundleBridgeToTL(TLMasterPortParameters.v1(Seq(TLMasterParameters.v1("bundleBridgeToTL")))) := ioMemNode
+      val ioMem = InModuleBody { ioMemNode.makeIO() }
+      ioMem
+    }
+  } else None
 
   // AXI4Stream nodes
   val ioInNode = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = dataBytes)))

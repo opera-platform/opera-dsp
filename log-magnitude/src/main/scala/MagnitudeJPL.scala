@@ -55,8 +55,8 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     x := absI
     y := absQ
   }.otherwise {
-    x:= absQ
-    y:= absI
+    x := absQ
+    y := absI
   }
 
   // Check condition X >= 3Y

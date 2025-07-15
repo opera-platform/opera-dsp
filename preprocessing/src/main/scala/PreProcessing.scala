@@ -169,7 +169,7 @@ object AXI4App extends App {
       ParseParameters.parseconfig(args(0)) match {
         case Left(x) => x
         case _ => {
-          AppLogger.error("Something went wrong when acquiring DMA Parameters")
+          AppLogger.error("Something went wrong when acquiring PreProcessing Parameters")
           throw new Exception("Invalid configuration")
         }
       }
@@ -204,7 +204,7 @@ object TLApp extends App {
       ParseParameters.parseconfig(args(0)) match {
         case Left(x) => x
         case _ => {
-          AppLogger.error("Something went wrong when acquiring DMA Parameters")
+          AppLogger.error("Something went wrong when acquiring PreProcessing Parameters")
           throw new Exception("Invalid configuration")
         }
       }
