@@ -41,7 +41,7 @@ Use the following commands in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; runMain preprocessing.ReverseApp"
+   sbt "project preprocessing; runMain opera.preprocessing.ReverseApp"
 
 This will generate SystemVerilog files in the ``./rtl/Reverse`` directory.
 
@@ -52,7 +52,7 @@ To run tests, use the following command in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; testOnly preprocessing.ReverseSpec"
+   sbt "project preprocessing; testOnly opera.preprocessing.ReverseSpec"
 
 Output directory is ``./test_run_dir/``.
 

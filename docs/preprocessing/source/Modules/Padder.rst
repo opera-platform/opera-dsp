@@ -82,7 +82,7 @@ You can generate SystemVerilog for the `Padder` module using the provided `Padde
 
 .. code-block:: bash
 
-   sbt "project preprocessing; runMain preprocessing.PadderApp"
+   sbt "project preprocessing; runMain opera.preprocessing.PadderApp"
 
 This will generate SystemVerilog files in the `./rtl/Padder` directory.
 
@@ -95,7 +95,7 @@ To run tests, use the following command in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; testOnly preprocessing.PadderSpec"
+   sbt "project preprocessing; testOnly opera.preprocessing.PadderSpec"
 
 Output directory is ``./test_run_dir/``.
 

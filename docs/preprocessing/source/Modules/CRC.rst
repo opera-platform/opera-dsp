@@ -82,7 +82,7 @@ Use the following commands in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; runMain preprocessing.CRCApp"
+   sbt "project preprocessing; runMain opera.preprocessing.CRCApp"
 
 This will generate SystemVerilog files in the ``./rtl/CRC`` directory.
 
@@ -95,7 +95,7 @@ To run tests, use the following command in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; testOnly preprocessing.CRCSpec"
+   sbt "project preprocessing; testOnly opera.preprocessing.CRCSpec"
 
 Output directory is ``./test_run_dir/``.
 

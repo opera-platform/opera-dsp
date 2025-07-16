@@ -182,9 +182,9 @@ Use the following commands in the project root folder:
 .. code-block:: bash
 
    # AXI4 Version
-   sbt "project preprocessing; runMain preprocessing.AXI4App"
+   sbt "project preprocessing; runMain opera.preprocessing.AXI4App"
    # TileLink Version
-   sbt "project preprocessing; runMain preprocessing.TLApp"
+   sbt "project preprocessing; runMain opera.preprocessing.TLApp"
 
 This generates SystemVerilog code in the ``./rtl/PreProcessingAXI4`` folder for the AXI4 variant or ``./rtl/PreProcessingTL`` for the TileLink variant.
 
@@ -193,9 +193,9 @@ Additionally, you can pass the path to a JSON file containing PreProcessing para
 .. code-block:: bash
 
    # AXI4 Version
-   sbt "project preprocessing; runMain preprocessing.AXI4App preprocessing/src/main/resources/parameters.json"
+   sbt "project preprocessing; runMain opera.preprocessing.AXI4App preprocessing/src/main/resources/parameters.json"
    # TileLink Version
-   sbt "project preprocessing; runMain preprocessing.TLApp preprocessing/src/main/resources/parameters.json"
+   sbt "project preprocessing; runMain opera.preprocessing.TLApp preprocessing/src/main/resources/parameters.json"
 
 You can find the example JSON configuration file `on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/preprocessing/src/main/resources/parameters.json>`_.
 
@@ -206,7 +206,7 @@ To run tests, use the following command in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; testOnly preprocessing.PreProcessingSpec"
+   sbt "project preprocessing; testOnly opera.preprocessing.PreProcessingSpec"
 
 Output directory is ``./test_run_dir/``.
 

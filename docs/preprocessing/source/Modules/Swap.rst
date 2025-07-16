@@ -77,7 +77,7 @@ To generate SystemVerilog for the `Swap` block, run the following from the proje
 
 .. code-block:: bash
 
-   sbt "project preprocessing; runMain preprocessing.SwapApp"
+   sbt "project preprocessing; runMain opera.preprocessing.SwapApp"
 
 This will create Verilog files in the ``./rtl/Swap`` directory.
 
@@ -90,7 +90,7 @@ To run tests, use the following command in the project root folder:
 
 .. code-block:: bash
 
-   sbt "project preprocessing; testOnly preprocessing.SwapSpec"
+   sbt "project preprocessing; testOnly opera.preprocessing.SwapSpec"
 
 Output directory is ``./test_run_dir/``.
 
