@@ -1,0 +1,21 @@
+{
+  "address": {
+    "base": "0x00002000",
+    "mask": "0x000000FF"
+  },
+  "parameters": {
+    "inputWidth"    : 16,
+    "inputBinPoint" : 14,
+    "realWidth"     : 16,
+    "realBinPoint"  : 14,
+    "outputWidth"   : 18,
+    "outputBinPoint": 14,
+    "lutTableSize"  : 10,
+    "lutTableWidth" : 14,
+    "magType"       : "JPL",
+    "addPipeRegs"   : false,
+    "mulPipeRegs"   : false,
+    "trimType"      : "Convergent",
+    "beatBytes"     : 4
+  }
+}

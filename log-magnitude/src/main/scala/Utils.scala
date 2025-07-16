@@ -38,7 +38,7 @@ object ParseParameters {
           lutTableSize = Some((content \ "parameters" \ "lutTableSize").get.as[Int]),
           lutTableWidth = Some((content \ "parameters" \ "lutTableWidth").get.as[Int]),
           magType = {
-            (content \ "parameters" \ "trimType").get.as[String] match {
+            (content \ "parameters" \ "magType").get.as[String] match {
               case "JPL"           => JPL
               case "Squared"       => Squared
               case "Log"           => Log
