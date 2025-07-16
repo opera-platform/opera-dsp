@@ -1,7 +1,7 @@
 Magnitude Overview
 ==================
 
-The `Magnitude` module is part of the OPERA-DSP project. This module is used to calculate (or to aproximate) magnitude of a complex signal. Module supports Squared magnitude and Jet Propulsion Laboratory magnitude approximation. `Magnitude` also includes block for calculating log2 of real signal.
+The `Magnitude` module is part of the OPERA-DSP project. This module is used to calculate (or to approximate) magnitude of a complex signal. Module supports Squared magnitude and Jet Propulsion Laboratory magnitude approximation. `Magnitude` also includes block for calculating log2 of real signal.
 
 This module extends the `DspBlock <https://chipyard.readthedocs.io/en/latest/Customization/Dsptools-Blocks.html>`_ trait for modular signal processing integration. 
 
@@ -10,7 +10,7 @@ Key features of the PreProcessing block include:
 - Squared magnitude (via the MagnitudeSquared module)
 - JPL magnitude approximation (via the MagnitudeJPL module)
 - Log2 calculation (via the MagnitudeLog module)
-- Combined magitude calculations (via the MagnitudeMuxed module)
+- Combined magnitude calculations (via the MagnitudeMuxed module)
 - Runtime control via memory-mapped registers in case when MagnitudeMuxed is instantiated
 
 For more information about these blocks see: :doc:`log-magnitude blocks <../Modules/Magnitudes>`.
@@ -47,7 +47,7 @@ LogMagnitude Parameters
 **Parameter descriptions:**
 
 - ``inputType``:
-  Input DspComplex[T] data type (not used in MagnitudeLog instatiation).
+  Input DspComplex[T] data type (not used for MagnitudeLog).
 
 - ``realType``:  
   Optional MagnitudeLog input data type (only relevant for MagnitudeLog implementations).
