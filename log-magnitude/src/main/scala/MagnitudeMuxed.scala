@@ -133,10 +133,10 @@ class MagnitudeMuxed[T <: Data: Real: BinaryRepresentation](val params: LogMagni
 object MagnitudeMuxedApp extends App {
   val params = LogMagnitudeParams[FixedPoint](
     inputType     = DspComplex(FixedPoint(16.W, 14.BP)),
-    realType      = Some(FixedPoint(16.W, 14.BP)),
-    outputType    = FixedPoint(16.W, 14.BP),
+    realType      = Some(FixedPoint(19.W, 14.BP)),
+    outputType    = FixedPoint(25.W, 14.BP),
     magType       = LogJPLSquared,
-    lutTableSize  = 10,
+    lutTableSize  = Some(10),
     lutTableWidth = Some(12),
     addPipeRegs   = false,
     mulPipeRegs   = false,

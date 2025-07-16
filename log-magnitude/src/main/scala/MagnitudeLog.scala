@@ -17,8 +17,13 @@ import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
  * of the most significant '1' bit in the input data.
  */
 class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitudeParams[T]) extends Module {
+  // lutTableSize and lutTableWidth must be defined
+  require(params.lutTableWidth.isDefined)
+  require(params.lutTableSize.isDefined)
+
   // Get data information
   private val lutTableWidth = params.lutTableWidth.get
+  private val lutTableSize = params.lutTableSize.get
   private val inputBinPointPosition = params.realType.get match {
     case fp: FixedPoint => fp.binaryPoint.get
     case _ => 0
@@ -28,7 +33,7 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     case _ => 0
   }
   // It is required that lutTableWidth >= params.lutTableSize in order to generate LUT properly
-  require(lutTableWidth >= params.lutTableSize)
+  require(lutTableWidth >= lutTableSize)
   // It is required for width of whole part of output to be greater then Log2(inputBingPoint) for correct minimum value
   require(params.outputType.getWidth - outputBinPointPosition > log2Ceil(inputBinPointPosition))
 
@@ -43,7 +48,7 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
     val lnOf2 = scala.math.log(2) // natural log of 2
     def log2(x: Double): Double = scala.math.log(x) / lnOf2
 
-    val sizeLUT = 1 << params.lutTableSize
+    val sizeLUT = 1 << lutTableSize
     val LUT = (0 until sizeLUT).map(n => {
       val lookupWire = Wire(FixedPoint((lutTableWidth + 2).W, lutTableWidth.BP))
       // log2(1 + f)
@@ -61,7 +66,7 @@ class MagnitudeLog[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   private val k = log2A.zext -& inputBinPointPosition.U.zext
   // Calculate LUT address
   private val address =
-    BinaryRepresentation[UInt].shr(Cat(A.asUInt, 0.U(params.lutTableSize.W)), log2A)(params.lutTableSize - 1, 0)
+    BinaryRepresentation[UInt].shr(Cat(A.asUInt, 0.U(lutTableSize.W)), log2A)(lutTableSize - 1, 0)
 
   // Get LUT value
   private val logFraction = Wire(UInt(lutTableWidth.W))
@@ -121,7 +126,7 @@ object MagnitudeLogApp extends App {
     realType      = Some(FixedPoint(20.W, 14.BP)),
     outputType    = FixedPoint(20.W, 14.BP),
     magType       = Log,
-    lutTableSize  = 10,
+    lutTableSize  = Some(10),
     lutTableWidth = Some(12),
     addPipeRegs   = false,
     trimType      = Convergent

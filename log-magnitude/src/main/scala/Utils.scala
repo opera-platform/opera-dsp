@@ -35,7 +35,7 @@ object ParseParameters {
             (content \ "parameters" \ "outputWidth").get.as[Int].W,
             (content \ "parameters" \ "outputBinPoint").get.as[Int].BP
           ),
-          lutTableSize = (content \ "parameters" \ "lutTableSize").get.as[Int],
+          lutTableSize = Some((content \ "parameters" \ "lutTableSize").get.as[Int]),
           lutTableWidth = Some((content \ "parameters" \ "lutTableWidth").get.as[Int]),
           magType = {
             (content \ "parameters" \ "trimType").get.as[String] match {

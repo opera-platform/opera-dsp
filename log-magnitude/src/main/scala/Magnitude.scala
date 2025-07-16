@@ -2,12 +2,11 @@ package opera.logmagnitude
 
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
-import chisel3.util.log2Ceil
 import circt.stage.{ChiselStage, FirtoolOption}
 import dspblocks._
 import dsptools.numbers.{BinaryRepresentation, Real}
 import freechips.rocketchip.amba.axi4._
-import freechips.rocketchip.amba.axi4stream.{AXI4StreamBuffer, AXI4StreamBundle, AXI4StreamMasterNode, AXI4StreamMasterParameters, AXI4StreamSlaveNode, AXI4StreamSlaveParameters}
+import freechips.rocketchip.amba.axi4stream.{AXI4StreamBundle, AXI4StreamMasterNode, AXI4StreamMasterParameters, AXI4StreamSlaveNode, AXI4StreamSlaveParameters}
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.regmapper._
 import freechips.rocketchip.resources._
@@ -42,7 +41,6 @@ class MagnitudeAXI4[T <: Data: Real: BinaryRepresentation](
   override def regmap(mapping: (Int, Seq[RegField])*): Unit =
     if (mem.isDefined) mem.get.regmap(mapping: _*)
     else {}
-
 }
 
 class MagnitudeTL[T <: Data: Real: BinaryRepresentation](
@@ -76,7 +74,6 @@ class MagnitudeTL[T <: Data: Real: BinaryRepresentation](
     else {}
 }
 
-
 abstract class Magnitude[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <: Data](params: LogMagnitudeParams[T])
   extends LazyModule()(Parameters.empty)
     with DspBlock[D, U, E, O, B]
@@ -101,7 +98,7 @@ abstract class Magnitude[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
     val in : AXI4StreamBundle = slaveNode.in.head._1
     assert(
       in.bits.data.getWidth == 8 * inputBeatBytes,
-      s"The input data width (${in.bits.data.getWidth}) should be the same as calculated one: (${8 * inputBeatBytes})."
+      s"The input data width (${in.bits.data.getWidth}) should be the same as calculated one (${8 * inputBeatBytes})."
     )
 
     // Optional Control register
@@ -114,8 +111,8 @@ abstract class Magnitude[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
       case JPL =>
         val block = Module(new MagnitudeJPL(params))
         block.io.i_last       := in.bits.last
-        block.io.in.bits.real := in.bits.data(inputBeatBytes*8-1, inputBeatBytes*4).asTypeOf(block.io.in.bits.real)
-        block.io.in.bits.imag := in.bits.data(inputBeatBytes*4-1, 0).asTypeOf(block.io.in.bits.imag)
+        block.io.in.bits.real := in.bits.data(inputWidth-1, inputWidth/2).asTypeOf(block.io.in.bits.real)
+        block.io.in.bits.imag := in.bits.data(inputWidth/2-1, 0).asTypeOf(block.io.in.bits.imag)
         block.io.in.valid     := in.valid
         in.ready              := block.io.in.ready
         out.bits.last         := block.io.o_last
@@ -125,8 +122,8 @@ abstract class Magnitude[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
       case Squared =>
         val block = Module(new MagnitudeSquared(params))
         block.io.i_last       := in.bits.last
-        block.io.in.bits.real := in.bits.data(inputBeatBytes * 8 - 1, inputBeatBytes * 4).asTypeOf(block.io.in.bits.real)
-        block.io.in.bits.imag := in.bits.data(inputBeatBytes * 4 - 1, 0).asTypeOf(block.io.in.bits.imag)
+        block.io.in.bits.real := in.bits.data(inputWidth-1, inputWidth/2).asTypeOf(block.io.in.bits.real)
+        block.io.in.bits.imag := in.bits.data(inputWidth/2-1, 0).asTypeOf(block.io.in.bits.imag)
         block.io.in.valid     := in.valid
         in.ready              := block.io.in.ready
         out.bits.last         := block.io.o_last
@@ -143,23 +140,11 @@ abstract class Magnitude[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
         out.bits.data         := block.io.out.bits.asTypeOf(out.bits.data)
         out.valid             := block.io.out.valid
         block.io.out.ready    := out.ready
-      case LogJPLSquared =>
+      case LogJPLSquared | LogSquaredJPL =>
         val block = Module(new MagnitudeMuxed(params))
         block.io.i_last       := in.bits.last
-        block.io.in.bits.real := in.bits.data(inputBeatBytes * 8 - 1, inputBeatBytes * 4).asTypeOf(block.io.in.bits.real)
-        block.io.in.bits.imag := in.bits.data(inputBeatBytes * 4 - 1, 0).asTypeOf(block.io.in.bits.imag)
-        block.io.in.valid     := in.valid
-        in.ready              := block.io.in.ready
-        out.bits.last         := block.io.o_last
-        out.bits.data         := block.io.out.bits.asTypeOf(out.bits.data)
-        out.valid             := block.io.out.valid
-        block.io.out.ready    := out.ready
-        block.io.i_sel.get    := r_sel.get
-      case LogSquaredJPL =>
-        val block = Module(new MagnitudeMuxed(params))
-        block.io.i_last       := in.bits.last
-        block.io.in.bits.real := in.bits.data(inputBeatBytes * 8 - 1, inputBeatBytes * 4).asTypeOf(block.io.in.bits.real)
-        block.io.in.bits.imag := in.bits.data(inputBeatBytes * 4 - 1, 0).asTypeOf(block.io.in.bits.imag)
+        block.io.in.bits.real := in.bits.data(inputWidth-1, inputWidth/2).asTypeOf(block.io.in.bits.real)
+        block.io.in.bits.imag := in.bits.data(inputWidth/2-1, 0).asTypeOf(block.io.in.bits.imag)
         block.io.in.valid     := in.valid
         in.ready              := block.io.in.ready
         out.bits.last         := block.io.o_last
@@ -253,4 +238,3 @@ object MagnitudeTLApp extends App {
       FirtoolOption("--o=./rtl/MagnitudeTL"))
   )
 }
-
