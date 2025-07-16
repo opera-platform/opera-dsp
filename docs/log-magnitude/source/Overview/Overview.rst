@@ -37,7 +37,7 @@ LogMagnitude Parameters
     realType      : Option[T] = None,
     outputType    : T,
     magType       : MagType = JPL,
-    lutTableSize  : Int = 16,
+    lutTableSize  : Option[Int] = None,
     lutTableWidth : Option[Int] = None,
     addPipeRegs   : Boolean = false,
     mulPipeRegs   : Boolean = false,
