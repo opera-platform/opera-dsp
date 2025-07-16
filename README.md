@@ -155,11 +155,54 @@ $ make test_windowing_all
 
 Test results will be stored in the `./test_run_dir` folder. 
 
-By default 672 tests will be run for both AXI4 and TileLink variants of the Windowing. For each (TileLink or AXI4), tests will take around 30 minutes. The tests can be found in folder [./windowing/src/test/scala/](windowing/src/test/scala). To reduce the number of tests, modify the [WindowingAXI4Spec](windowing/src/test/scala/WindowingAXI4Spec.scala) and/or [WindowingTLSpec](windowing/src/test/scala/WindowingTLSpec.scala) parameters.
+By default 672 tests will be run for both AXI4 and TileLink variants of the Windowing. For each (TileLink or AXI4), tests will take around 30 minutes. The tests can be found in folder [/windowing/src/test/scala/](windowing/src/test/scala). To reduce the number of tests, modify the [WindowingAXI4Spec](windowing/src/test/scala/WindowingAXI4Spec.scala) and/or [WindowingTLSpec](windowing/src/test/scala/WindowingTLSpec.scala) parameters.
 
-## Log2Magnitude block
+## Magnitude block
 
-Work in Progress
+This module is used to calculate (or to approximate) magnitude of a complex signal. Module supports Squared magnitude and Jet Propulsion Laboratory magnitude approximation (refer to this [document](https://ipnpr.jpl.nasa.gov/progress_report/42-40/40L.PDF) for more information). This module also includes block for calculating log2 value of the real input signal.
+
+### Documentation
+
+For detailed information about the Magnitude block, including instructions for RTL generation and test execution, refer to the documentation in the [/docs/log-magnitude](/docs/log-magnitude) folder.
+
+To generate the documentation:
+
+```bash
+# For HTML (output in ./docs/log-magnitude/build/html)
+$ make docs_magnitude_html
+# For PDF (output in ./docs/log-magnitude/)
+$ make docs_magnitude_pdf
+```
+
+### RTL generation
+
+To generate AXI4 or TileLink variants of the Magnitude block, use the following commands in the project root directory:
+
+```bash
+# AXI4
+$ make rtl_magnitude_axi4
+# TileLink
+$ make rtl_magnitude_tl
+```
+
+The generated SystemVerilog code will be located in the `./rtl` folder.
+
+### Tests
+
+To run the Magnitude tests, use the following command in the project root directory:
+
+```bash
+# AXI4
+$ make test_magnitude_axi4
+# TileLink
+$ make test_magnitude_tl
+# For all tests, this will take a lot of time
+$ make test_magnitude_all
+```
+
+Test results will be stored in the `./log-magnitude/test_run_dir` folder. 
+
+By default 1368 tests will be run for both AXI4 and TileLink variants of the Magnitude. For each (TileLink or AXI4), tests will take around 60 minutes. Tests can be found in folder [./log-magnitude/src/test/scala/](log-magnitude/src/test/scala). To reduce the number of tests, modify the [*Spec.scala](log-magnitude/src/test/scala) file parameters.
 
 ## FFT block
 
