@@ -96,9 +96,9 @@ Use the following commands in the project root folder:
 .. code-block:: bash
 
    # AXI4 Version
-   sbt "project windowing; runMain windowing.AXI4App"
+   sbt "project windowing; runMain opera.windowing.AXI4App"
    # TileLink Version
-   sbt "project windowing; runMain windowing.TLApp"
+   sbt "project windowing; runMain opera.windowing.TLApp"
 
 This generates SystemVerilog code in the ``./rtl/WindowingAXI4`` folder for the AXI4 variant or ``./rtl/WindowingTL`` for the TileLink variant.
 
@@ -107,9 +107,9 @@ Additionally, you can pass the path to a JSON file containing Windowing paramete
 .. code-block:: bash
 
    # AXI4 Version
-   sbt "project windowing; runMain windowing.AXI4App windowing/src/main/resources/parameters.json"
+   sbt "project windowing; runMain opera.windowing.AXI4App windowing/src/main/resources/parameters.json"
    # TileLink Version
-   sbt "project windowing; runMain windowing.TLApp windowing/src/main/resources/parameters.json"
+   sbt "project windowing; runMain opera.windowing.TLApp windowing/src/main/resources/parameters.json"
 
 You can find the example JSON configuration file `on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/windowing/src/main/resources/parameters.json>`_.
 
@@ -121,9 +121,9 @@ To run tests, use the following command in the project root folder:
 .. code-block:: bash
 
    # AXI4 Version
-   sbt "project windowing; testOnly windowing.WindowingAXI4Spec"
+   sbt "project windowing; testOnly opera.windowing.WindowingAXI4Spec"
    # TileLink Version
-   sbt "project windowing; testOnly windowing.WindowingTLSpec"
+   sbt "project windowing; testOnly opera.windowing.WindowingTLSpec"
 
 Output directory is ``.windowing/test_run_dir/``.
 
