@@ -25,7 +25,7 @@ class MagnitudeTLSpec extends AnyFlatSpec with ChiselScalatestTester {
   val verbose    = false
   val random     = true
 
-  for (magType <- Seq(LogSquaredJPL, LogJPLSquared)) {
+  for (magType <- Seq(JPL, Squared, Log, LogSquaredJPL, LogJPLSquared)) {
     for (addPipeRegs <- Seq(false, true)) {
       for (mulPipeRegs <- Seq(false, true)) {
         for (inBinaryPoint <- Seq(8, 10, 12)) {
