@@ -48,12 +48,12 @@ test_magnitude_muxed:
 
 test_magnitude_all:
 	sbt -J-Xms2048M -J-Xmx8G "project log-magnitude; \
-	testOnly opera.preprocessing.MagnitudeAXI4Spec; \
-	testOnly opera.preprocessing.MagnitudeTLSpec; \
-	testOnly opera.preprocessing.MagnitudeJPLSpec; \
-	testOnly opera.preprocessing.MagnitudeSquaredSpec; \
-	testOnly opera.preprocessing.MagnitudeLogSpec; \
-	testOnly opera.preprocessing.MagnitudeMuxedSpec; \
+	testOnly opera.logmagnitude.MagnitudeAXI4Spec; \
+	testOnly opera.logmagnitude.MagnitudeTLSpec; \
+	testOnly opera.logmagnitude.MagnitudeJPLSpec; \
+	testOnly opera.logmagnitude.MagnitudeSquaredSpec; \
+	testOnly opera.logmagnitude.MagnitudeLogSpec; \
+	testOnly opera.logmagnitude.MagnitudeMuxedSpec; \
 	"
 
 #####################################################
