@@ -82,7 +82,7 @@ class MagnitudeMuxedTester(
       inputBinPoint  = inputBinPoint,
       lutTableWidth  = lutTableWidth,
       outputBinPoint = outputBinPoint,
-      lutTableSize   = params.lutTableSize,
+      lutTableSize   = params.lutTableSize.get,
       trimType       = params.trimType
     )
     val log = (logDouble * scala.math.pow(2, outputBinPoint)).toBigInt

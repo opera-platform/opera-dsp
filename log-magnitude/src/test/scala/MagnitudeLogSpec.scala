@@ -15,25 +15,25 @@ class MagnitudeLogSpec extends AnyFlatSpec with ChiselScalatestTester {
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
   val sampleSize  = 128
-  val verbose     = true
+  val verbose     = false
   val random      = true
   val dataRandom  = true
 
   for (magType <- Seq(Log)) {
     for (addPipeRegs <- Seq(false, true)) {
-      for (lutTableSize <- Seq(4, 8)) {
-        for (outBinaryPoint <- Seq(8, 10, 12)) {
-          for (inputBinaryPoint <- Seq(8, 10, 12)) {
-            for (lutTableWidth <- Seq(8, 10, 12)) {
-              for (inputWholePart <- Seq(2, 3, 4)) {
-                for (extendOut <- Seq(0, 1, 2)) {
+      for (outBinaryPoint <- Seq(8, 10, 12)) {
+        for (inputBinaryPoint <- Seq(8, 10, 12)) {
+          for (inputWholePart <- Seq(2, 3, 4)) {
+            for (extendOut <- Seq(0, 1, 2)) {
+              for (lutTableSize <- Seq(4, 8)) {
+                for (lutTableWidth <- Seq(8, 10, 12)) {
                   val outputWholePart = log2Ceil(inputBinaryPoint) + 1 + extendOut
                   // Parameters
                   val params = LogMagnitudeParams[FixedPoint](
                     inputType     = DspComplex(FixedPoint(16.W, 0.BP)), // This doesn't matter for Log
                     realType      = Some(FixedPoint((inputWholePart + inputBinaryPoint).W, inputBinaryPoint.BP)),
                     outputType    = FixedPoint((outputWholePart + outBinaryPoint).W, outBinaryPoint.BP),
-                    lutTableSize  = lutTableSize,
+                    lutTableSize  = Some(lutTableSize),
                     lutTableWidth = Some(lutTableWidth),
                     magType       = magType,
                     addPipeRegs   = addPipeRegs,

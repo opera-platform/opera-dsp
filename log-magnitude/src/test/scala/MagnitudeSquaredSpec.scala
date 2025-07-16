@@ -14,7 +14,7 @@ class MagnitudeSquaredSpec extends AnyFlatSpec with ChiselScalatestTester {
   val annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
 
   val sampleSize  = 256
-  val verbose     = true
+  val verbose     = false
   val random      = true
   val dataRandom  = true
 

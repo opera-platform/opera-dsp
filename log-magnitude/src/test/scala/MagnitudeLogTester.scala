@@ -43,7 +43,7 @@ class MagnitudeLogTester(
 
   // Calculate reference value
   val expectedData: Seq[Double] = inData.map { m =>
-    logModel(m, inputBinPoint, lutTableWidth, outputBinPoint, params.lutTableSize, params.trimType)
+    logModel(m, inputBinPoint, lutTableWidth, outputBinPoint, params.lutTableSize.get, params.trimType)
   }
 
   // Reset DeCoupled nodes
