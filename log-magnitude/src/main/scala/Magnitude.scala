@@ -46,7 +46,7 @@ class MagnitudeAXI4[T <: Data: Real: BinaryRepresentation](
 class MagnitudeTL[T <: Data: Real: BinaryRepresentation](
   address  : AddressSet,
   params   : LogMagnitudeParams[T],
-  beatBytes: Int = 4
+  beatBytes: Int
 )(implicit p: Parameters)
   extends Magnitude[
     T,
