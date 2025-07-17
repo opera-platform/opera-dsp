@@ -24,7 +24,11 @@ class WindowingAXI4Tester(
   enable           : Boolean = true,
   verbose          : Boolean = true,
   random           : Boolean = true
-) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with AXI4MasterModel with SignalUtils {
+) extends PeekPokeTester(dut.module)
+  with AXI4StreamRandomMasterModel[LazyModuleImp]
+  with AXI4MasterModel
+  with SignalUtils
+  with TestUtils {
 
   if (verbose) {
     print(f"\n#####################################\n")
@@ -80,14 +84,13 @@ class WindowingAXI4Tester(
   val expectedData: Seq[(BigInt, BigInt)] = if (window.isDefined & params.windowFunc.function.isDefined & enable)
     inDataComplex.zip(window.get).map {
       case (data, coefficient) =>
-        val real = ArithmeticUtils.toSignedNBits(data >> (dataWidth / 2), dataWidth / 2)
-        val imag = ArithmeticUtils.toSignedNBits(data & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
-        val coef = ArithmeticUtils.roundWithMode(coefficient * (1 << winBinPoint), Convergent)
-        val tmpReal = real.toDouble * coef / scala.math.pow(2, winBinPoint)
-        val tmpImag = imag.toDouble * coef / scala.math.pow(2, winBinPoint)
-        val outReal = ArithmeticUtils.roundWithMode(tmpReal, params.trimType).toInt
-        val outImag = ArithmeticUtils.roundWithMode(tmpImag, params.trimType).toInt
-        (outReal, outImag)
+        windowModel(
+          data        = data,
+          coefficient = coefficient,
+          dataWidth   = dataWidth,
+          winBinPoint = winBinPoint,
+          trimType    = params.trimType
+        )
     }
   else inData.map {
     data =>
