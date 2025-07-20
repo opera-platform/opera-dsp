@@ -3,59 +3,50 @@ package opera.windowing
 import breeze.math.Complex
 import chisel3._
 import chiseltest.iotesters.PeekPokeTester
-import dsptools.numbers.Convergent
+import dsptools.numbers.{Convergent, DspComplex}
 import fixedpoint._
-import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.tilelink.{TLBundle, TLMasterModel}
-import opera.common.{ArithmeticUtils, TestStandaloneTLBlock, SignalUtils}
+import opera.common.{ArithmeticUtils, SignalUtils, StandaloneTLBlock}
 import org.chipsalliance.diplomacy.lazymodule.LazyModuleImp
 
 import scala.math.BigDecimal.double2bigDecimal
+import scala.util.Random
 
 class WindowingTLTester(
-  dut              : WindowingTL[FixedPoint] with TestStandaloneTLBlock,
+  dut              : WindowingTL[FixedPoint] with StandaloneTLBlock,
   csrAddress       : AddressSet,
   ramAddress       : AddressSet,
   windowFuncRunTime: WindowType,
   params           : WindowingParams[FixedPoint],
-  freq             : Double = 15.54 / 1024,
-  beatBytes        : Int = 4,
+  beatBytes        : Int,
   enable           : Boolean = true,
   verbose          : Boolean = true,
   random           : Boolean = true
-) extends PeekPokeTester(dut.module) with AXI4StreamRandomMasterModel[LazyModuleImp] with TLMasterModel with SignalUtils {
-
-  if (verbose) {
-    print(f"\n#####################################\n")
-    print(f"# Windowing options: \n")
-    print(f"# \twindow enabled = $enable\n")
-    print(f"# \twindow size    = ${params.numPoints}\n")
-    print(f"# \twindow type    = ${params.windowFunc.toString}\n")
-    print(f"# \trun-time       = ${params.runTime}\n")
-    print(f"# \tROM for coeffs = ${params.constWindow}\n")
-    print(f"# \tbeatBytes      = $beatBytes\n")
-    print(f"#####################################\n")
-  }
+) extends PeekPokeTester(dut.module)
+  with TLMasterModel
+  with SignalUtils
+  with TestUtils {
 
   val mod: LazyModuleImp = dut.module
-
-  // Input data width
-  val dataWidth: Int = params.dataType.getWidth
-
   // Bind nodes
   def memTL: TLBundle = dut.ioMem.get
-  val inMaster: AXI4StreamRandomPeekPokeMaster = bindMaster(dut.in.getWrappedValue, random = random)
 
+  // Data widths
+  val inputWidth : Int = params.inputType.getWidth / 2
+  val outputWidth: Int = params.outputType.getWidth / 2
+  val coeffWidth : Int = params.coeffType.getWidth
   // Data binary points
-  val dataBinPoint = params.dataType.real match {
-    case fp: FixedPoint => fp.binaryPoint.get
+  val inputBinPoint = params.inputType match {
+    case data: DspComplex[FixedPoint] => data.real.binaryPoint.get
     case _ => 0
   }
-
-  // Window coefficient's binary points
-  val winBinPoint = params.coeffType match {
-    case fp: FixedPoint => fp.binaryPoint.get
+  val outputBinPoint = params.outputType match {
+    case data: DspComplex[FixedPoint] => data.real.binaryPoint.get
+    case _ => 0
+  }
+  val coeffBinPoint = params.coeffType match {
+    case data: FixedPoint => data.binaryPoint.get
     case _ => 0
   }
 
@@ -64,50 +55,62 @@ class WindowingTLTester(
 
   // Get window function
   val window: Option[Seq[Double]] =
-    if (params.runTime & !params.constWindow) windowFuncRunTime.function else params.windowFunc.function
+    if (params.runTime & !params.constWindow & params.windowFunc.function.isDefined) {
+      windowFuncRunTime.function
+    } else {
+      params.windowFunc.function
+    }
 
   // Generate test array
-  val inData: Seq[Complex] = generateSignal(numSamples = numPoints, freqReal1 = freq, freqImag1 = freq).map(c =>
-    Complex(c.real * scala.math.pow(2, dataBinPoint), c.imag * scala.math.pow(2, dataBinPoint))
-  )
-
-  // Convert complex data to adequate AXI4Stream format (i.e. Int)
-  val inDataComplex: Seq[BigInt] = complexToAXI4StreamSequence(inData, dataWidth / 2)
+  val inData: Seq[Complex] = Seq.fill(numPoints) {
+    Complex(
+      Random.nextLong((1 << inputWidth) - 1).toDouble,
+      Random.nextLong((1 << inputWidth) - 1).toDouble
+    )
+  }
+  // Convert data to adequate AXI4Stream format
+  val inputStreamData: Seq[BigInt] = complexToAXI4StreamSequence(inData, inputWidth)
+  // Format input data for widnowing model
+  val inDataComplex: Seq[(BigInt, BigInt)] = inputStreamData.map { data =>
+    val real = ArithmeticUtils.toSignedNBits(data.toLong >> inputWidth, inputWidth)
+    val imag = ArithmeticUtils.toSignedNBits(data.toLong & ((1 << inputWidth) - 1), inputWidth)
+    (real, imag)
+  }
 
   // Calculate reference value
   // If windowing function is defined and windowing is enabled, calculate the result
   // Otherwise, output of the block should be the same as input
   val expectedData: Seq[(BigInt, BigInt)] = if (window.isDefined & params.windowFunc.function.isDefined & enable)
-    inDataComplex.zip(window.get).map {
+    inputStreamData.zip(window.get).map {
       case (data, coefficient) =>
-        val real = ArithmeticUtils.toSignedNBits(data >> (dataWidth / 2), dataWidth / 2)
-        val imag = ArithmeticUtils.toSignedNBits(data & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
-        val coef = ArithmeticUtils.roundWithMode(coefficient * (1 << winBinPoint), Convergent)
-        val tmpReal = real.toDouble * coef / scala.math.pow(2, winBinPoint)
-        val tmpImag = imag.toDouble * coef / scala.math.pow(2, winBinPoint)
-        val outReal = ArithmeticUtils.roundWithMode(tmpReal, params.trimType).toInt
-        val outImag = ArithmeticUtils.roundWithMode(tmpImag, params.trimType).toInt
-        (outReal, outImag)
+        windowModel(
+          inputData      = data,
+          coefficient    = coefficient,
+          inputWidth     = inputWidth,
+          inputBinPoint  = inputBinPoint,
+          outputBinPoint = outputBinPoint,
+          coeffBinPoint  = coeffBinPoint,
+          trimType       = params.trimType
+        )
     }
   else inData.map {
     data =>
-      val real = ArithmeticUtils.toSignedNBits(data.real.toInt, dataWidth / 2)
-      val imag = ArithmeticUtils.toSignedNBits(data.imag.toInt, dataWidth / 2)
+      val real = ArithmeticUtils.toSignedNBits(data.real.toInt, inputWidth)
+      val imag = ArithmeticUtils.toSignedNBits(data.imag.toInt, inputWidth)
       (real, imag)
   }
 
   // If run-time is enabled and RAM is used to store coefficients, write function coefficients to memory
   if (params.runTime & window.isDefined & !params.constWindow & params.windowFunc.function.isDefined) {
     window.get.zipWithIndex.foreach{ case (m, i) =>
-      val coefficient = ArithmeticUtils.roundWithMode(m * (1 << winBinPoint), Convergent).toBigInt
+      val coefficient = ArithmeticUtils.roundWithMode(m * (1 << coeffBinPoint), Convergent).toBigInt
       memWriteWord(ramAddress.base + beatBytes * i, coefficient, beatBytes)
-
     }
-    step(10)
+    step(5)
   }
 
-  // Reset stream nodes
-  resetMaster(dut.in)
+  // Reset values
+  poke(dut.in.valid, 0)
   poke(dut.out.ready, 0)
   step(1)
 
@@ -120,43 +123,59 @@ class WindowingTLTester(
   poke(dut.out.ready, true.B)
   step(1)
 
-  // Add input data to AXI4Stream transactions
-  inMaster.addTransactions(inDataComplex.indices.map(i => AXI4StreamTransaction(data = inDataComplex(i))))
-  inMaster.addTransactions(inDataComplex.zipWithIndex.map {
-    case (data, idx) => AXI4StreamTransaction(data = data, last = if (idx == inDataComplex.length - 1) true else false)
-  })
-
-  // We are checking only one data window
-  var counter = 0
+  var read_counter = 0
+  var write_counter = 0
   var peekedValue: BigInt = 0
-  while (counter < numPoints) {
+  var peekedLast: BigInt = false
+
+  while (read_counter < numPoints) {
     // Randomize ready
     poke(dut.out.ready, if (random) scala.util.Random.nextInt(2) else 1)
+    poke(dut.in.valid, if (random) scala.util.Random.nextInt(2) else 1)
+    // Write input data
+    if (peek(dut.in.valid) == 1 && peek(dut.in.ready) == 1 && write_counter < inData.length) {
+      poke(dut.in.bits.data, inputStreamData(write_counter))
+      if (write_counter == numPoints - 1) poke(dut.in.bits.last, true.B) else poke(dut.in.bits.last, false.B)
+      write_counter = write_counter + 1
+    }
     // Check output data
     if (peek(dut.out.valid) == 1 && peek(dut.out.ready) == 1) {
       peekedValue = peek(dut.out.bits.data)
-      val real = ArithmeticUtils.toSignedNBits(peekedValue >> (dataWidth / 2), dataWidth / 2)
-      val imag = ArithmeticUtils.toSignedNBits(peekedValue & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
+      peekedLast = peek(dut.out.bits.last)
+      // Expected values
+      val expected = expectedData(read_counter)
+      val expectedLast = if (read_counter == numPoints - 1) BigInt(1) else BigInt(0)
+      val real = ArithmeticUtils.toSignedNBits(peekedValue >> outputWidth, outputWidth)
+      val imag = ArithmeticUtils.toSignedNBits(peekedValue & ((1 << outputWidth) - 1), outputWidth)
       // Print if enabled
-      if (verbose & window.isDefined) {
-        val in_real = ArithmeticUtils.toSignedNBits(inDataComplex(counter) >> (dataWidth / 2), dataWidth / 2)
-        val in_imag = ArithmeticUtils.toSignedNBits(inDataComplex(counter) & ((1 << (dataWidth/2)) - 1), dataWidth / 2)
-        val coef = ArithmeticUtils.roundWithMode(window.get(counter) * (1 << winBinPoint), Convergent).toBigInt
-        print(f"i: 0x$counter%04X, ")
-        print(f"input: $in_real%6d + $in_imag%6dj, coefficient: $coef%6d, ")
+      if (verbose) {
+        val in_real = inDataComplex(read_counter)._1
+        val in_imag = inDataComplex(read_counter)._2
+        print(f"i: 0x$read_counter%04X, ")
+        print(f"input: $in_real%6d + $in_imag%6dj,")
+        if (window.isDefined) {
+          val coef = ArithmeticUtils.roundWithMode(window.get(read_counter) * (1 << coeffBinPoint), Convergent).toBigInt
+          print(f"coefficient: $coef%6d, ")
+        }
         print(f"peeked data: $real%6d + $imag%6dj, ")
-        print(f"expected data: ${expectedData(counter)._1}%6d + ${expectedData(counter)._2}%6dj.\n")
+        print(f"expected data: ${expected._1}%6d + ${expected._2}%6dj.\n")
       }
       // Check results
       require(
-        expectedData(counter)._1 == real & expectedData(counter)._2 == imag,
-        f"[0x$counter%04X] Expected and received data are different.\n" +
-          f"\texpected: ${expectedData(counter)._1} + j${expectedData(counter)._2},\n" +
-          f"\treceived: $real + j$imag,\n"
+        expected._1 == real && expected._2 == imag,
+        f"[0x$read_counter%04X] Expected and received data are different.\n" +
+          f"\texpected: ${expected._1} + ${expected._2}, " +
+          f"\treceived: $real + ${imag}j\n"
       )
-      counter = counter + 1
+      require(
+        expectedLast == peekedLast,
+        f"[0x$read_counter%04X] Expected and received last signals are different.\n" +
+          f"\texpected: $expectedLast, " +
+          f"\treceived: $peekedLast\n"
+      )
+      read_counter = read_counter + 1
     }
     step(1)
   }
-  step(20)
+  step(5)
 }

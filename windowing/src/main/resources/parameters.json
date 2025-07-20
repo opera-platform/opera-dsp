@@ -8,15 +8,19 @@
     "mask": "0x00000FFF"
   },
   "parameters": {
-    "numPoints"  : 1024,
-    "dataWidth"  : 16,
-    "binPoint"   : 14,
-    "constWindow": false,
-    "trimType"   : "Convergent",
-    "memoryFile" : "./test_run_dir/window.txt",
-    "windowFunc" : "BlackmanWindow",
-    "customFile" : "./test_run_dir/window_32.txt",
-    "periodic"   : true,
-    "sigma"      : 0.5
+    "inputWidth"    : 16,
+    "inputBinPoint" : 14,
+    "outputWidth"   : 18,
+    "outputBinPoint": 14,
+    "coeffWidth"    : 16,
+    "coeffBinPoint" : 14,
+    "numPoints"     : 1024,
+    "constWindow"   : false,
+    "trimType"      : "Convergent",
+    "memoryFile"    : "./test_run_dir/window.txt",
+    "windowFunc"    : "BlackmanWindow",
+    "customFile"    : "./test_run_dir/window_32.txt",
+    "periodic"      : true,
+    "sigma"         : 0.5
   }
 }

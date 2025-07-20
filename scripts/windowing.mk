@@ -17,14 +17,20 @@ rtl_windowing_all:
 #####################################################
 # Tests
 #####################################################
-test_windowing_axi4:
-	sbt "project windowing; testOnly opera.windowing.WindowingAXI4Spec"
-test_windowing_tl:
-	sbt "project windowing; testOnly opera.windowing.WindowingTLSpec"
+test_windowing_binPoint_axi4:
+	sbt -J-Xms2048M -J-Xmx8G "project windowing; testOnly opera.windowing.WindowingBinPointAXI4Spec"
+test_windowing_functions_axi4:
+	sbt -J-Xms2048M -J-Xmx8G "project windowing; testOnly opera.windowing.WindowingFunctionsAXI4Spec"
+test_windowing_binPoint_tl:
+	sbt -J-Xms2048M -J-Xmx8G "project windowing; testOnly opera.windowing.WindowingBinPointTLSpec"
+test_windowing_functions_tl:
+	sbt -J-Xms2048M -J-Xmx8G "project windowing; testOnly opera.windowing.WindowingFunctionsTLSpec"
 test_windowing_all:
-	sbt "project windowing; \
-	testOnly opera.windowing.WindowingAXI4Spec; \
-	testOnly opera.windowing.WindowingTLSpec; \
+	sbt -J-Xms2048M -J-Xmx8G "project windowing; \
+	testOnly opera.windowing.WindowingBinPointAXI4Spec; \
+	testOnly opera.windowing.WindowingFunctionsAXI4Spec; \
+	testOnly opera.windowing.WindowingBinPointTLSpec; \
+	testOnly opera.windowing.WindowingFunctionsTLSpec; \
 	"
 
 #####################################################

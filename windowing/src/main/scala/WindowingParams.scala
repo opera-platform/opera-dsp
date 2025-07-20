@@ -6,9 +6,10 @@ import dsptools.numbers._
 import fixedpoint._
 
 case class WindowingParams[T <: Data](
-  dataType   : DspComplex[T], // Input data type
-  numPoints  : Int,           // Chirp size
+  inputType  : DspComplex[T], // Input data type
+  outputType : DspComplex[T], // Output data type
   coeffType  : T,             // Coefficient data type
+  numPoints  : Int,           // Chirp size
   runTime    : Boolean,       // Use run-time configurable chirp size
   windowFunc : WindowType,    // Window function
   memoryFile : String,        // Text file location in which to store coefficients
@@ -18,8 +19,9 @@ case class WindowingParams[T <: Data](
 
 object WindowingParams {
   def fixed(
-    dataWidth  : Int = 16,
-    binPoint   : Int = 14,
+    inputType  : DspComplex[FixedPoint] = DspComplex(FixedPoint(16.W, 14.BP)),
+    outputType : DspComplex[FixedPoint] = DspComplex(FixedPoint(18.W, 14.BP)),
+    coeffType  : FixedPoint = FixedPoint(16.W, 14.BP),
     numPoints  : Int = 1024,
     runTime    : Boolean = true,
     windowFunc : WindowType = NoWindow(),
@@ -27,13 +29,11 @@ object WindowingParams {
     constWindow: Boolean = true,
     trimType   : TrimType = Convergent
   ): WindowingParams[FixedPoint] = {
-    val dataType  = DspComplex(FixedPoint(dataWidth.W, binPoint.BP))
-    val coeffType = FixedPoint(dataWidth.W, (dataWidth - 2).BP)
-
     WindowingParams(
-      numPoints   = numPoints,
-      dataType    = dataType,
+      inputType   = inputType,
+      outputType  = outputType,
       coeffType   = coeffType,
+      numPoints   = numPoints,
       runTime     = runTime,
       windowFunc  = windowFunc,
       memoryFile  = memoryFile,

@@ -1,8 +1,8 @@
 package opera.windowing
 
-import chisel3.Data
-import dsptools.numbers.{Ceiling, Convergent, Floor, Round}
-import fixedpoint.FixedPoint
+import chisel3.{Data, fromIntToWidth}
+import dsptools.numbers.{Ceiling, Convergent, DspComplex, Floor, Round}
+import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 import freechips.rocketchip.diplomacy.AddressSet
 import opera.common.ArithmeticUtils.roundWithMode
 import opera.common.StringUtils.formatString
@@ -34,7 +34,7 @@ object Utils {
 }
 
 object ParseParameters {
-  def parseconfig(filename: String) = {
+  def parseconfig(filename: String): Either[(AddressSet, AddressSet, WindowingParams[FixedPoint]), Nothing] = {
     try {
       val resource = scala.io.Source.fromFile(filename)
       val content  = Json.parse(resource.getLines().mkString)
@@ -54,9 +54,23 @@ object ParseParameters {
       val customFile = (content \ "parameters" \ "customFile").get.as[String]
       val sigma = (content \ "parameters" \ "sigma").get.as[Double]
       val parameters = WindowingParams.fixed(
-        numPoints   = numPoints,
-        dataWidth   = (content \ "parameters" \ "dataWidth").get.as[Int],
-        binPoint    = (content \ "parameters" \ "binPoint" ).get.as[Int],
+        inputType = DspComplex(
+          FixedPoint(
+            (content \ "parameters" \ "inputWidth").get.as[Int].W,
+            (content \ "parameters" \ "inputBinPoint").get.as[Int].BP
+          )
+        ),
+        outputType = DspComplex(
+          FixedPoint(
+            (content \ "parameters" \ "outputWidth").get.as[Int].W,
+            (content \ "parameters" \ "outputBinPoint").get.as[Int].BP
+          )
+        ),
+        coeffType = FixedPoint(
+          (content \ "parameters" \ "coeffWidth").get.as[Int].W,
+          (content \ "parameters" \ "coefBinPoint").get.as[Int].BP
+        ),
+        numPoints = numPoints,
         constWindow = (content \ "parameters" \ "constWindow").get.as[Boolean],
         trimType    = {
           (content \ "parameters" \ "trimType").get.as[String] match {

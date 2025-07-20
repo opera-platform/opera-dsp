@@ -1,5 +1,6 @@
 package opera.windowing
 
+import breeze.linalg.{max, min}
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util.experimental.loadMemoryFromFileInline
@@ -18,6 +19,7 @@ import freechips.rocketchip.tilelink.{TLBundle, TLBundleParameters, TLClientPort
 import opera.common.{AppLogger, StandaloneAXI4Block, StandaloneTLBlock}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
+import org.chipsalliance.diplomacy.nodes.NodeHandle
 
 /**
  * WindowingAXI4 is AXI4 wrapper for Windowing block.
@@ -173,12 +175,41 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
   with HasCSR
   with HasSRAM {
 
+  // Get input and output widths
+  private val inputWidth     : Int = params.inputType.getWidth / 2
+  private val outputWidth    : Int = params.outputType.getWidth / 2
+  private val coeffWidth     : Int = params.coeffType.getWidth
+  private val inputBeatBytes : Int = math.ceil(inputWidth.toDouble / 4).toInt
+  private val outputBeatBytes: Int = math.ceil(outputWidth.toDouble / 4).toInt
+
+  // Data binary points
+  val inputBinPoint = params.inputType.real match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+  val outputBinPoint = params.outputType.real match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+  val coeffBinPoint = params.coeffType match {
+    case data: FixedPoint => data.binaryPoint.get
+    case _ => 0
+  }
+
   // AXI4 stream IN/OUT node
-  val streamNode = AXI4StreamIdentityNode()
+  private val slaveNode = AXI4StreamSlaveNode(AXI4StreamSlaveParameters())
+  private val masterNode = AXI4StreamMasterNode(AXI4StreamMasterParameters(
+    name = "outNode", n = outputBeatBytes
+  ))
+  val streamNode = NodeHandle(slaveNode, masterNode)
 
   lazy val module = new LazyModuleImp(this) {
-    val in  = streamNode.in.head._1
-    val out = streamNode.out.head._1
+    val out: AXI4StreamBundle = masterNode.out.head._1
+    val in : AXI4StreamBundle = slaveNode.in.head._1
+    assert(
+      in.bits.data.getWidth == 8 * inputBeatBytes,
+      s"The input data width (${in.bits.data.getWidth}) should be the same as calculated one (${8 * inputBeatBytes})."
+    )
 
     // Control registers
     val r_size = RegInit(params.numPoints.U(log2Ceil(params.numPoints + 1).W))
@@ -222,8 +253,8 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
       val r_address = RegInit(0.U(log2Ceil(params.numPoints).W))
 
       // Wires
-      val w_in_complex  = Wire(params.dataType.cloneType)
-      val w_out_complex = Wire(params.dataType.cloneType)
+      val w_in_complex  = Wire(params.inputType.cloneType)
+      val w_out_complex = Wire(params.outputType.cloneType)
 
       // RAM declaration
       val ram: Option[SyncReadMem[Vec[UInt]]] = if (!params.constWindow) {
@@ -250,43 +281,53 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
       // Increment window address
       when(in.fire) { r_address := Mux(r_address === (w_size - 1.U), 0.U, r_address + 1.U) }
       // Get window coefficient
-      val coefficient =
+      val coefficient: T = Wire(params.coeffType.cloneType)
         // get coefficients from ROM
         if (params.constWindow) {
-          rom.get(r_address)
+          coefficient := rom.get(r_address)
         // get coefficient's from RAM
         } else {
           // Read one RAM word from memory
-          ram.get(r_address).asTypeOf(params.coeffType)
+          coefficient := ram.get(r_address).asTypeOf(params.coeffType)
         }
 
       // Multiplication with the windowing coefficient
       when(r_en) {
         // Windowing is performed only when r_en is active
-        DspContext.alter(
-          DspContext.current.copy(
-            trimType = params.trimType,
-            binaryPointGrowth = 0
-          )
-        ) {
-          w_out_complex.real := w_in_complex.real.context_*(coefficient)
-          w_out_complex.imag := w_in_complex.imag.context_*(coefficient)
+        val w_real = DspContext.alter(DspContext.current.copy(trimType = params.trimType, binaryPointGrowth = 0)) {
+          val w_mul = w_in_complex.real * coefficient
+          val mulBinPoint = w_mul.cloneType match {
+            case data: FixedPoint => data.binaryPoint.get
+            case _ => 0
+          }
+          (w_in_complex.real * coefficient).div2(if (mulBinPoint > outputBinPoint) {mulBinPoint - outputBinPoint} else 0)
         }
+        val w_imag = DspContext.alter(DspContext.current.copy(trimType = params.trimType, binaryPointGrowth = 0)) {
+          val w_mul = w_in_complex.imag * coefficient
+          val mulBinPoint = w_mul.cloneType match {
+            case data: FixedPoint => data.binaryPoint.get
+            case _ => 0
+          }
+          (w_in_complex.imag * coefficient).div2(if (mulBinPoint > outputBinPoint) mulBinPoint - outputBinPoint else 0)
+        }
+        w_out_complex.real := w_real.asTypeOf(w_out_complex.imag)
+        w_out_complex.imag := w_imag.asTypeOf(w_out_complex.imag)
       }.otherwise {
         // Otherwise just pass the input data to the output
-        w_out_complex := w_in_complex
+        w_out_complex.real := w_in_complex.real.asTypeOf(w_out_complex.real)
+        w_out_complex.imag := w_in_complex.imag.asTypeOf(w_out_complex.imag)
       }
       if (params.constWindow) {
         in.ready      := out.ready
         out.valid     := in.valid
         out.bits.last := in.bits.last
-        w_in_complex  := in.bits.data.asTypeOf(params.dataType)
+        w_in_complex  := in.bits.data.asTypeOf(params.inputType)
       } else {
-        val r_data  = Reg(params.dataType.cloneType)
+        val r_data  = Reg(params.inputType.cloneType)
         val r_valid = RegInit(false.B)
         val r_last  = Reg(Bool())
         when(in.ready) {
-          r_data  := in.bits.data.asTypeOf(params.dataType)
+          r_data  := in.bits.data.asTypeOf(params.inputType)
           r_valid := in.valid
           r_last  := in.bits.last
         }
@@ -300,6 +341,10 @@ abstract class Windowing[T <: Data: Real: BinaryRepresentation, D, U, E, O, B <:
 
     } else {
       out <> in
+      out.bits.data := Cat(
+        in.bits.data(inputWidth * 2 - 1, inputWidth).asTypeOf(SInt(outputWidth.W)),
+        in.bits.data(inputWidth - 1, 0).asTypeOf(SInt(outputWidth.W))
+      )
     }
   }
 }
@@ -349,7 +394,12 @@ object AXI4App extends App {
       params     = blockParams._3,
       beatBytes  = beatBytes
     ) with StandaloneAXI4Block {
-      override def standaloneParams = AXI4BundleParameters(addrBits = beatBytes*8, dataBits = beatBytes*8, idBits = 1)
+      override def standaloneParams: AXI4BundleParameters =
+        AXI4BundleParameters(
+          addrBits = beatBytes*8,
+          dataBits = beatBytes*8,
+          idBits   = 1
+        )
       override def dataBytes: Int = 4
     }
   )
@@ -409,7 +459,7 @@ object TLApp extends App {
       params     = blockParams._3,
       beatBytes  = beatBytes
     ) with StandaloneTLBlock {
-      override def standaloneParams =
+      override def standaloneParams: TLBundleParameters =
         TLBundleParameters(
           addressBits    = beatBytes * 8,
           dataBits       = beatBytes * 8,
