@@ -219,3 +219,17 @@ lazy val `log-magnitude` = (project in file("log-magnitude"))
     Test / unmanagedResourceDirectories += baseDirectory.value / "src" / "main" / "resources" / "vsrc",
     Test / fork := true
   )
+
+lazy val fft = (project in file("fft"))
+  .dependsOn(rocketchip, rocket_dsp_utils, common)
+  .settings(
+    libraryDependencies ++= rocketLibDeps.value,
+    libraryDependencies ++= Seq("edu.berkeley.cs" %% "chiseltest" % chiselTestVersion),
+    libraryDependencies ++= Seq("com.typesafe.play" %% "play-json" % "2.10.6"),
+    libraryDependencies ++= Seq("org.scalanlp" %% "breeze" % "2.1.0")
+  )
+  .settings(commonSettings)
+  .settings(
+    Test / unmanagedResourceDirectories += baseDirectory.value / "src" / "main" / "resources" / "vsrc",
+    Test / fork := true
+  )
