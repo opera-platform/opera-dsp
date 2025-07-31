@@ -52,8 +52,6 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
   // Double buffer
   val memDepth: Int        = params.memDepth
   private val memories     = Seq.fill(2) { SyncReadMem(memDepth, params.dataType) } // Double buffer
-  private val r_mem_empty  = Seq.fill(2) { RegInit(true.B)  } // Empty flag for memories
-  private val r_mem_full   = Seq.fill(2) { RegInit(false.B) } // Full flag for memories
   private val w_mem_data_1 = Wire(params.dataType)
   private val w_mem_data_2 = Wire(params.dataType)
   
@@ -74,7 +72,7 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
   private val w_rd_addr: UInt = Wire(r_rd_cnt.cloneType)
   private val w_wr_addr: UInt = Wire(r_wr_cnt.cloneType)
   private val r_wr_mem_sel: Bool = RegInit(false.B) // select in which memory to write
-  private val w_rd_mem_sel: Bool = Wire(Bool())     // select from which memory to read
+  private val r_rd_mem_sel: Bool = RegInit(false.B) // select from which memory to read
   dontTouch(r_wr_cnt)
   dontTouch(r_rd_cnt)
   dontTouch(w_wr_cnt_rst)
@@ -99,18 +97,18 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
 
   io.in.ready := true.B
   w_valid:= false.B
-  w_rd_mem_sel := !r_wr_mem_sel
 
   when(r_state === FSM.s_idle) {
     // Reset state
     io.in.ready  := true.B
     w_valid := false.B
-    r_state      := FSM.s_write
+    r_state := FSM.s_write
   }.elsewhen(r_state === FSM.s_write) {
     // Memories are empty, we can only write to them
     io.in.ready  := true.B
     w_valid := false.B
     when (w_wr_wrap) {
+      w_valid      := true.B
       r_state      := FSM.s_write_read
       r_wr_mem_sel := !r_wr_mem_sel
     }
@@ -120,35 +118,24 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
     w_valid := true.B
     when(w_rd_wrap) {
       r_state      := FSM.s_write_read
-      r_wr_mem_sel := !r_wr_mem_sel
+      r_rd_mem_sel := !r_rd_mem_sel
     }
   }.elsewhen(r_state === FSM.s_write_read) {
     // We can read from one memory and write to another
     io.in.ready  := true.B
     w_valid := true.B
     // Change state
-    when(r_mem_empty.head && r_mem_empty.last) {
-      r_state      := FSM.s_write
+    when(w_wr_wrap && RegNext(w_rd_wrap)) {
       r_wr_mem_sel := !r_wr_mem_sel
-    }.elsewhen(r_mem_full.head && r_mem_full.last) {
-      r_state      := FSM.s_read
-      r_wr_mem_sel := !r_wr_mem_sel
-    }.elsewhen(w_wr_wrap && w_rd_wrap) {
+      r_rd_mem_sel := !r_rd_mem_sel
+    }.elsewhen(RegNext(w_rd_wrap)) {
+      w_valid := false.B
+      r_state := FSM.s_write
+      r_rd_mem_sel := !r_rd_mem_sel
+    }.elsewhen(w_wr_wrap) {
+      r_state := FSM.s_read
       r_wr_mem_sel := !r_wr_mem_sel
     }
-  }
-
-  // Read/Write to double buffer memories
-  when(r_wr_mem_sel === 0.U) {
-    when(w_wr_wrap)   { r_mem_full.head  := true.B }
-    when(io.out.fire) { r_mem_full.last  := false.B }
-    when(w_rd_wrap)   { r_mem_empty.last := true.B }
-    when(io.in.fire)  { r_mem_empty.head := false.B }
-  }.otherwise {
-    when(w_wr_wrap)   { r_mem_full.last  := true.B }
-    when(io.out.fire) { r_mem_full.head  := false.B }
-    when(w_rd_wrap)   { r_mem_empty.head := true.B }
-    when(io.in.fire)  { r_mem_empty.last := false.B }
   }
 
   if (params.singlePortMem) {
@@ -178,7 +165,7 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
 
   w_rd_en := w_valid && io.out.ready
   io.o_last := w_rd_wrap
-  io.out.bits := Mux(w_rd_mem_sel, w_mem_data_2, w_mem_data_1)
+  io.out.bits := Mux((r_rd_mem_sel), w_mem_data_2, w_mem_data_1)
   io.out.valid := RegNext(w_valid)
 }
 
