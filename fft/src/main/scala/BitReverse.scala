@@ -67,7 +67,7 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
   private val w_wr_wrap    = Wire(Bool()) // wrap the value of write counter
   private val w_rd_wrap    = Wire(Bool()) // wrap the value of read counter
   private val w_rd_en      = Wire(Bool())
-  private val r_wr_cnt     = CounterWithReset(io.in.fire , memDepth, w_wr_cnt_rst)._1 // write counter with reset
+  private val r_wr_cnt     = CounterWithReset(io.in.fire, memDepth, w_wr_cnt_rst)._1 // write counter with reset
   private val r_rd_cnt     = CounterWithReset(w_rd_en, memDepth, w_rd_cnt_rst)._1 // read counter with reset
   private val w_rd_addr: UInt = Wire(r_rd_cnt.cloneType)
   private val w_wr_addr: UInt = Wire(r_wr_cnt.cloneType)
@@ -80,8 +80,8 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
   // Conditions to wrap and reset counters
   w_wr_wrap    := r_wr_cnt === (io.i_samples.getOrElse(memDepth.U) - 1.U) && io.in.fire
   w_rd_wrap    := r_rd_cnt === (io.i_samples.getOrElse(memDepth.U) - 1.U) && io.out.fire
-  w_wr_cnt_rst := w_wr_wrap || r_state === FSM.s_idle
-  w_rd_cnt_rst := w_rd_wrap || r_state === FSM.s_idle
+  w_wr_cnt_rst := w_wr_wrap || reset.asBool
+  w_rd_cnt_rst := w_rd_wrap || reset.asBool
 
   // Generate write and read address
   private val fftStageNumber = log2Ceil(memDepth)
@@ -95,48 +95,32 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
   w_wr_addr := MuxCase(0.U(fftStageNumber.W), w_mux_case_map)
   w_rd_addr := r_rd_cnt
 
-  io.in.ready := true.B
-  w_valid:= false.B
-
   when(r_state === FSM.s_idle) {
     // Reset state
-    io.in.ready  := true.B
-    w_valid := false.B
     r_state := FSM.s_write
   }.elsewhen(r_state === FSM.s_write) {
     // Memories are empty, we can only write to them
-    io.in.ready  := true.B
-    w_valid := false.B
     when (w_wr_wrap) {
-      w_valid      := true.B
-      r_state      := FSM.s_write_read
-      r_wr_mem_sel := !r_wr_mem_sel
+      r_state := FSM.s_write_read
     }
   }.elsewhen(r_state === FSM.s_read) {
     // Memories are full, we can only read from them
-    io.in.ready := false.B
-    w_valid := true.B
     when(w_rd_wrap) {
-      r_state      := FSM.s_write_read
-      r_rd_mem_sel := !r_rd_mem_sel
+      r_state := FSM.s_write_read
     }
   }.elsewhen(r_state === FSM.s_write_read) {
     // We can read from one memory and write to another
-    io.in.ready  := true.B
-    w_valid := true.B
     // Change state
-    when(w_wr_wrap && RegNext(w_rd_wrap)) {
-      r_wr_mem_sel := !r_wr_mem_sel
-      r_rd_mem_sel := !r_rd_mem_sel
-    }.elsewhen(RegNext(w_rd_wrap)) {
-      w_valid := false.B
+    when((w_rd_wrap && !w_wr_wrap)) {
       r_state := FSM.s_write
-      r_rd_mem_sel := !r_rd_mem_sel
-    }.elsewhen(w_wr_wrap) {
+    }.elsewhen(!w_rd_wrap && w_wr_wrap) {
       r_state := FSM.s_read
-      r_wr_mem_sel := !r_wr_mem_sel
     }
   }
+  io.in.ready := r_state =/= FSM.s_read
+  w_valid := r_state === FSM.s_write_read || r_state === FSM.s_read
+  when (w_rd_wrap) { r_rd_mem_sel := !r_rd_mem_sel}
+  when (w_wr_wrap) { r_wr_mem_sel := !r_wr_mem_sel}
 
   if (params.singlePortMem) {
     val w_address_1 = Mux(r_wr_mem_sel, w_wr_addr, w_rd_addr)
@@ -159,14 +143,15 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
     w_mem_data_1 := memories.head(w_rd_addr)
     w_mem_data_2 := memories.last(w_rd_addr)
   }
-  dontTouch(w_mem_data_1)
-  dontTouch(w_mem_data_2)
 
-
+  val b_queue = Module(new Queue(chiselTypeOf(io.out.bits), entries = 1, pipe = false, flow = true))
+  b_queue.io.enq.bits := Mux(RegNext(r_rd_mem_sel), w_mem_data_2, w_mem_data_1)
   w_rd_en := w_valid && io.out.ready
+  b_queue.io.enq.valid := RegNext(w_valid && io.out.ready ,false.B)
+  io.out.bits  := b_queue.io.deq.bits
+  io.out.valid := b_queue.io.deq.valid
+  b_queue.io.deq.ready := io.out.ready
   io.o_last := w_rd_wrap
-  io.out.bits := Mux((r_rd_mem_sel), w_mem_data_2, w_mem_data_1)
-  io.out.valid := RegNext(w_valid)
 }
 
 object BitReverseApp extends App {
