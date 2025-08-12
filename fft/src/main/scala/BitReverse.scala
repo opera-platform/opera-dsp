@@ -122,16 +122,16 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
 
   // Read and/or write to buffers
   if (params.singlePortMem) {
-    val w_address_1 = Mux(r_wr_mem_sel, w_wr_addr, w_rd_addr)
-    val w_address_2 = Mux(!r_wr_mem_sel, w_wr_addr, w_rd_addr)
-    when(io.in.fire && r_wr_mem_sel) {
-      memories.last(w_address_1) := io.in.bits
-    }
-    when(io.in.fire && !r_wr_mem_sel) {
-      memories.head(w_address_2) := io.in.bits
-    }
-    w_mem_data_1 := memories.last(w_address_1)
-    w_mem_data_2 := memories.head(w_address_2)
+    val w_address_1 = Mux(io.in.fire && (!r_wr_mem_sel), w_wr_addr, w_rd_addr)
+    val w_address_2 = Mux(io.in.fire &&   r_wr_mem_sel, w_wr_addr, w_rd_addr)
+
+    val w_port_1 = memories.head(w_address_1)
+    when(io.in.fire && !r_wr_mem_sel) { w_port_1 := io.in.bits }
+    w_mem_data_1 := w_port_1
+
+    val w_port_2 = memories.last(w_address_2)
+    when(io.in.fire && r_wr_mem_sel) { w_port_2 := io.in.bits }
+    w_mem_data_2 := w_port_2
   } else {
     when(io.in.fire && !r_wr_mem_sel) {
       memories.head(w_wr_addr) := io.in.bits
