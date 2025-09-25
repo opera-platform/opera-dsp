@@ -23,20 +23,34 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   private val w_butterfly_scaled = Seq.fill(2)(Wire(params.dataType))
   private val w_output_mux_ctrl  = Wire(Bool())
   private val w_overflow         = Wire(Bool())
-  private val w_counter          = Wire(UInt(log2Ceil(params.fftSize).W))
 
+  // Registers
+  private val r_counter = RegInit(0.U(log2Ceil(params.fftSize).W))
+  private val r_counter_2 = RegInit(((params.fftSize/2 + 1) & (params.fftSize - 1)).U(log2Ceil(params.fftSize).W))
+  private val w_en_delayed = ShiftRegister(io.i_en, latency, true.B)
+
+
+  r_counter := r_counter + io.i_en
+  r_counter_2 := r_counter_2 + io.i_en
+  dontTouch(r_counter)
+  dontTouch(r_counter_2)
+
+  print(f"decimation: ${params.decimation}, stage size: ${params.fftSize}, log ${log2Ceil(params.fftSize)}\n")
   dontTouch(w_delay_mux_ctrl)
   dontTouch(w_output_mux_ctrl)
-  w_counter := io.i_counter & io.i_mask
+  w_delay_mux_ctrl.suggestName("w_delay_mux_ctrl")
+  w_output_mux_ctrl.suggestName("w_output_mux_ctrl")
   w_delay_in := Mux(w_delay_mux_ctrl, io.in, w_butterfly_scaled(1))
   if (params.decimation == DIF) {
-    w_delay_mux_ctrl  := w_counter < delay.U
+    io.o_counter       := r_counter
+    w_delay_mux_ctrl  := r_counter < delay.U
     w_delay_out       := DelayBuffer(w_delay_in, delay, io.i_en, params.singlePortMem, params.bufferAsMem)
     w_output_mux_ctrl := ShiftRegister(w_delay_mux_ctrl, params.addPipeRegs, false.B, true.B)
   } else {
-    w_delay_mux_ctrl  := ShiftRegister(w_counter < delay, latency, false.B, true.B)
-    w_delay_out       := DelayBuffer(w_delay_in, delay, ShiftRegister(io.i_en, latency, true.B), params.singlePortMem, params.bufferAsMem)
-    w_output_mux_ctrl := ShiftRegister(w_counter < delay.U, params.addPipeRegs + latency, false.B, true.B)
+    io.o_counter      := r_counter_2
+    w_delay_mux_ctrl  := ShiftRegister(r_counter_2 < delay, latency, false.B, true.B)
+    w_delay_out       := DelayBuffer(w_delay_in, delay, w_en_delayed, params.singlePortMem, params.bufferAsMem)
+    w_output_mux_ctrl := ShiftRegister(r_counter_2 < delay.U, params.addPipeRegs + latency, false.B, true.B)
   }
   io.out := Mux(
     w_output_mux_ctrl,
@@ -58,7 +72,20 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
       }
     )
 
-    
+    params.dataType.real match {
+      case fp: FixedPoint =>
+        w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map(sGrow => {
+          val width = sGrow.getWidth
+          val binaryPoint = fp.binaryPoint.get
+          val tooBig = !sGrow.isSignNegative && (BinaryRepresentation[T].shr(sGrow, width - 2) === Real[T]
+            .fromDouble(1 / math.pow(2, binaryPoint)))
+          val tooSmall =
+            sGrow.isSignNegative && (BinaryRepresentation[T].shr(sGrow, width - 2) === Real[T].fromDouble(0.0))
+          tooBig || tooSmall
+        }).foldLeft(false.B)(_ || _)
+      case _ =>
+        w_overflow := false.B
+    }
 
     w_butterfly_scaled.head := Mux(
       io.i_divBy2.getOrElse(params.divBy2.B),
@@ -76,9 +103,6 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
     io.o_overflow.get := w_overflow
   }
 
-  io.o_en      := ShiftRegisterWithReset(io.i_en, latency + params.addPipeRegs, false.B, reset.asBool, true.B)
-  io.o_counter := ShiftRegisterWithReset(io.i_counter, latency + params.addPipeRegs, 0.U, reset.asBool, true.B)
+  io.o_en := ShiftRegisterWithReset(io.i_en, latency + params.addPipeRegs, false.B, reset.asBool, true.B)
   dontTouch(io.o_en)
-  dontTouch(io.o_counter)
-  dontTouch(io.i_mask)
 }
