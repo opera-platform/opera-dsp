@@ -49,7 +49,7 @@ object TwiddleFromLUT {
     val mirror = Mux(q(0), nDiv4U - m, m).asTypeOf(UInt(idWidth.W)) // if odd quadrant, mirror
     val sineID = mirror(log2Ceil(nDiv4 + 1) - 1, 0)
     // Map quarter-wave index to LUT index
-    val twiddleID = sineID * stride.U
+    val twiddleID = (sineID * stride.U)(log2Ceil(FFT_size/2)-1,0)
     val sinA = LUT(twiddleID)             // sin(a)
     val cosA = LUT((FFT_size / 4).U - twiddleID) // cos(a) = sin(π/2 - a)
     // find quadrant-based signs
