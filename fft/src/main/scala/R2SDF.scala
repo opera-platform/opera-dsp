@@ -108,16 +108,13 @@ class R2SDF[T <: Data: Real: BinaryRepresentation] (params: RadixParams[T]) exte
       }
     )
 
+    // Check for underflow/overflow
     params.dataType.real match {
       case fp: FixedPoint =>
-        w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map(sGrow => {
-          val width = sGrow.getWidth
-          val binaryPoint = fp.binaryPoint.get
-          val tooBig = !sGrow.isSignNegative && (BinaryRepresentation[T].shr(sGrow, width - 2) === Real[T]
-            .fromDouble(1 / math.pow(2, binaryPoint)))
-          val tooSmall =
-            sGrow.isSignNegative && (BinaryRepresentation[T].shr(sGrow, width - 2) === Real[T].fromDouble(0.0))
-          tooBig || tooSmall
+        w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map(data => {
+          val overflow = !data.isSignNegative && (BinaryRepresentation[T].shr(data, data.getWidth - 2) === Real[T].fromDouble(1 / math.pow(2, fp.binaryPoint.get)))
+          val underflow = data.isSignNegative && (BinaryRepresentation[T].shr(data, data.getWidth - 2) === Real[T].fromDouble(0.0))
+          overflow || underflow
         }).foldLeft(false.B)(_ || _)
       case _ =>
         w_overflow := false.B
