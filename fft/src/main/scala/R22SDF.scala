@@ -10,11 +10,11 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   val params: RadixParams[T],
 ) extends Module {
   // Info:
-  print(f"decimation: ${params.decimation}, stage size: ${params.fftSize}, log ${log2Ceil(params.fftSize)}\n")
+  print(f"decimation: ${params.decimation}, stage size: ${params.stageSize}, log ${log2Ceil(params.stageSize)}\n")
   // Variables
   private val latency     = params.latency
   private val delay       = params.delay
-  private val cnt_init    = if (params.decimation == DIF) 0 else (params.fftSize / 2 + 1) & (params.fftSize - 1)
+  private val cnt_init    = if (params.decimation == DIF) 0 else (params.stageSize / 2 + 1) & (params.stageSize - 1)
   private val shift_delay = if (params.decimation == DIF) 0 else latency
   // IOs
   val io: RadixIO[T] = IO(new RadixIO(params))
@@ -27,11 +27,11 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   private val w_output_mux_ctrl  = Wire(Bool())
   private val w_overflow         = Wire(Bool())
   // Registers
-  private val r_counter = RegInit(cnt_init.U(log2Ceil(params.fftSize).W))
+  private val r_counter = RegInit(cnt_init.U(log2Ceil(params.stageSize).W))
   private val r_en_delayed = ShiftRegister(io.i_en, shift_delay, true.B)
   // Counter
   r_counter := r_counter + io.i_en
-  io.o_counter      := r_counter
+  io.o_counter := r_counter
   // Enable for next stage
   io.o_en := ShiftRegisterWithReset(io.i_en, latency + params.addPipeRegs, false.B, reset.asBool, true.B)
   // Delay buffer connections and control

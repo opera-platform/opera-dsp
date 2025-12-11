@@ -30,6 +30,16 @@ class R2SDF[T <: Data: Real: BinaryRepresentation] (params: RadixParams[T]) exte
   private val w_butterfly_scaled = Seq.fill(2)(Wire(params.dataType))
   private val w_output_mux_ctrl  = Wire(Bool())
   private val w_overflow         = Wire(Bool())
+  // Registers
+  private val r_counter = RegInit(0.U(log2Ceil(params.stageSize).W))
+  private val r_counter_2 = RegInit(((params.stageSize / 2 + 1) & (params.stageSize - 1)).U(log2Ceil(params.stageSize).W))
+  private val w_en_delayed = ShiftRegister(io.i_en, latency, true.B)
+
+
+  r_counter := r_counter + io.i_en
+  r_counter_2 := r_counter_2 + io.i_en
+  dontTouch(r_counter)
+  dontTouch(r_counter_2)
   // Twiddle factor
   private val w_twiddle = Wire(params.twiddleType)
   private val m_twiddle = Wire(Vec(delay, params.twiddleType)) // ROM
@@ -40,16 +50,16 @@ class R2SDF[T <: Data: Real: BinaryRepresentation] (params: RadixParams[T]) exte
         twiddle.imag := params.twiddleType.real.fromDoubleWithFixedWidth(-sin(2.0*Pi*k/(2*delay)))
     }
   }
-  
+
   w_delay_in := Mux(w_delay_mux_ctrl, w_in, w_butterfly_scaled.last)
   if (params.decimation == DIF) {
-    w_twiddle         := ShiftRegister(m_twiddle(io.i_counter(log2Ceil(delay)-1, 0)), params.addPipeRegs, true.B)
-    w_delay_mux_ctrl  := io.i_counter < delay.U
+    w_twiddle         := ShiftRegister(m_twiddle(r_counter(log2Ceil(delay)-1, 0)), params.addPipeRegs, true.B)
+    w_delay_mux_ctrl  := r_counter < delay.U
     w_delay_out       := DelayBuffer(w_delay_in, delay, io.i_en, params.singlePortMem, params.bufferAsMem)
     w_output_mux_ctrl := ShiftRegister(w_delay_mux_ctrl, params.addPipeRegs, false.B, true.B)
     // Twiddle factor at the output
     w_in := io.in
-    when(ShiftRegister(io.i_counter < delay.U && io.i_counter =/= 0.U, latency + params.addPipeRegs, true.B)) {
+    when(ShiftRegister(r_counter < delay.U && r_counter =/= 0.U, latency + params.addPipeRegs, true.B)) {
       io.out := DspContext.alter(
         DspContext.current.copy(trimType = params.trimType, numAddPipes = params.addPipeRegs, numMulPipes = params.mulPipeRegs)) {
           DspContext.alter(DspContext.current.copy(trimType = NoTrim, overflowType = Grow, complexUse4Muls = params.dspMul4)) {
@@ -60,12 +70,12 @@ class R2SDF[T <: Data: Real: BinaryRepresentation] (params: RadixParams[T]) exte
       io.out := ShiftRegister(w_out, latency, true.B)
     }
   } else {
-    w_twiddle         := m_twiddle(io.i_counter(log2Ceil(delay)-1, 0))
-    w_delay_mux_ctrl  := ShiftRegister(io.i_counter < delay.U, latency, false.B, true.B)
+    w_twiddle         := m_twiddle(r_counter(log2Ceil(delay)-1, 0))
+    w_delay_mux_ctrl  := ShiftRegister(r_counter < delay.U, latency, false.B, true.B)
     w_delay_out       := DelayBuffer(w_delay_in, delay, ShiftRegister(io.i_en, latency, true.B), params.singlePortMem, params.bufferAsMem)
-    w_output_mux_ctrl := ShiftRegister(io.i_counter < delay.U, params.addPipeRegs + latency, false.B, true.B)
+    w_output_mux_ctrl := ShiftRegister(r_counter < delay.U, params.addPipeRegs + latency, false.B, true.B)
     // Twiddle factor at the input
-    when(ShiftRegister(io.i_counter > delay, latency, true.B)) {
+    when(ShiftRegister(r_counter > delay, latency, true.B)) {
       w_in := DspContext.alter(
         DspContext.current.copy(trimType = params.trimType, numAddPipes = params.addPipeRegs, numMulPipes = params.mulPipeRegs)) {
           DspContext.alter(DspContext.current.copy(trimType = NoTrim, overflowType = Grow, complexUse4Muls = params.dspMul4)) {
@@ -98,7 +108,20 @@ class R2SDF[T <: Data: Real: BinaryRepresentation] (params: RadixParams[T]) exte
       }
     )
 
-    //TODO: overflow
+    params.dataType.real match {
+      case fp: FixedPoint =>
+        w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map(sGrow => {
+          val width = sGrow.getWidth
+          val binaryPoint = fp.binaryPoint.get
+          val tooBig = !sGrow.isSignNegative && (BinaryRepresentation[T].shr(sGrow, width - 2) === Real[T]
+            .fromDouble(1 / math.pow(2, binaryPoint)))
+          val tooSmall =
+            sGrow.isSignNegative && (BinaryRepresentation[T].shr(sGrow, width - 2) === Real[T].fromDouble(0.0))
+          tooBig || tooSmall
+        }).foldLeft(false.B)(_ || _)
+      case _ =>
+        w_overflow := false.B
+    }
 
     w_butterfly_scaled.head := Mux(
       io.i_divBy2.getOrElse(params.divBy2.B),

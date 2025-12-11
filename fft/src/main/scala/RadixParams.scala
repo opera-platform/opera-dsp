@@ -5,11 +5,15 @@ import chisel3.util._
 import dsptools._
 import dsptools.numbers._
 
+sealed trait DecimationType
+case object DIT extends DecimationType
+case object DIF extends DecimationType
+
 case class RadixParams[T <: Data] (
   dataType     : DspComplex[T],
   twiddleType  : DspComplex[T],
-  fftSize      : Int,
-  decimation   : DecimType,
+  stageSize    : Int,
+  decimation   : DecimationType,
   overflowReg  : Boolean,
   divBy2Reg    : Boolean,
   divBy2       : Boolean,
@@ -23,6 +27,6 @@ case class RadixParams[T <: Data] (
   singlePortMem: Boolean,
   trimType     : TrimType,
 ) {
-  require(isPow2(fftSize), f"FFT size must be a power of 2, instead it is: $fftSize")
+  require(isPow2(stageSize), f"Stage size must be a power of 2, instead it is: $stageSize")
   require(isPow2(delay)  , f"delay must be a power of 2, instead it is: $delay")
 }
