@@ -37,6 +37,6 @@ test_windowing_all:
 # docs
 #####################################################
 docs_windowing_html:
-	cd docs/windowing; make html; cd -;
+	cd docs/windowing; make html; mv ./build/html ../../website/docs/windowing; cd -;
 docs_windowing_pdf:
 	cd docs/windowing; make latexpdf; mv ./build/latex/windowing.pdf ./windowing.pdf; cd -;

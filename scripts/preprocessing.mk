@@ -63,6 +63,6 @@ test_preprocessing_all:
 # docs
 #####################################################
 docs_preprocessing_html:
-	cd docs/preprocessing; make html; cd -;
+	cd docs/preprocessing; make html; mv ./build/html ../../website/docs/preprocessing; cd -;
 docs_preprocessing_pdf:
 	cd docs/preprocessing; make latexpdf; mv ./build/latex/preprocessing.pdf ./preprocessing.pdf; cd -;

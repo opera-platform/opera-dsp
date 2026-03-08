@@ -60,6 +60,6 @@ test_magnitude_all:
 # docs
 #####################################################
 docs_magnitude_html:
-	cd docs/log-magnitude; make html; cd -;
+	cd docs/log-magnitude; make html; mv ./build/html ../../website/docs/log-magnitude; cd -;
 docs_magnitude_pdf:
 	cd docs/log-magnitude; make latexpdf; mv ./build/latex/magnitude.pdf ./magnitude.pdf; cd -;
