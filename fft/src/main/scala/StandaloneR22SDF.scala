@@ -35,6 +35,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   private val w_last_stage_valid = Wire(Bool())
   private val isStageOdd         = Wire(Vec(noOfStages, Bool()))
   private val isStageActive      = Wire(Vec(noOfStages, Bool()))
+  private val isActiveOdd        = Wire(Vec(noOfStages, Bool()))
   // Calculate if the difference between maximum number of stages and runtime number of stages is odd
   private val isShiftedAddress   = r_num_stages(0) ^ noOfStages.U.extract(0)
 
@@ -94,6 +95,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
       active := Mux(noOfStages.U - r_num_stages <= index.U, true.B, false.B)
       odd := (index.U - (noOfStages.U - r_num_stages))(0) // check only the lower bit, if 1 then the result is odd
   }
+  isActiveOdd.zipWithIndex.foreach { case (ao, i) => ao := isStageActive(i) && isStageOdd(i) }
 
   // register initialization
   r_num_stages := io.i_size.getOrElse(noOfStages.U) // number of stages
@@ -147,13 +149,31 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
           if (isItDIF) {
             val address = Cat(r_counters_msb(i), stage.io.o_counter) + (1 << (noOfStages - i - 1)).U
             w_twiddle_address(i) := Mux(isShiftedAddress, address << 1, address)
-            val indexToTwiddles: UInt = Mux(isShiftedAddress, ((i >> 1).U - 1.U).asUInt, (i.U >> 1.U).asUInt)
-            w_twiddles(i) := ShiftRegister(w_lookup_twiddles(indexToTwiddles), params.numAddPipes, true.B)
+            if (noOfTwiddles == 1) {
+              w_twiddles(i) := ShiftRegister(w_lookup_twiddles(0), params.numAddPipes, true.B)
+            } else if (noOfTwiddles > 1) {
+              val twIdx = log2Ceil(noOfTwiddles)
+              val indexToTwiddles: UInt = Mux(
+                isShiftedAddress,
+                ((i >> 1).U - 1.U).asTypeOf(UInt(twIdx.W)),
+                (i.U >> 1.U).asTypeOf(UInt(twIdx.W))
+              )
+              w_twiddles(i) := ShiftRegister(w_lookup_twiddles(indexToTwiddles), params.numAddPipes, true.B)
+            } else {
+              w_twiddles(i) := 0.U.asTypeOf(w_twiddles(i))
+            }
           } else {
             val address = Cat(r_counters_msb(i), stage.io.o_counter) + (1 << (i + 1)).U
-            val indexToTwiddles = if (evenNoOfStages) ((i.U - 1.U) >> 1.U).asUInt else (i.U >> 1.U).asUInt
             w_twiddle_address(i) := Mux(isShiftedAddress, address << 1, address)
-            w_twiddles(i) := w_lookup_twiddles(indexToTwiddles)
+            if (noOfTwiddles == 1) {
+              w_twiddles(i) := w_lookup_twiddles(0)
+            } else if (noOfTwiddles > 1) {
+              val twIdx = log2Ceil(noOfTwiddles)
+              val indexToTwiddles = (if (evenNoOfStages) ((i.U - 1.U) >> 1.U) else (i.U >> 1.U)).asTypeOf(UInt(twIdx.W))
+              w_twiddles(i) := w_lookup_twiddles(indexToTwiddles)
+            } else {
+              w_twiddles(i) := 0.U.asTypeOf(w_twiddles(i))
+            }
           }
         }.otherwise { // Trivial twiddle factors
           if (isItDIF)
@@ -229,12 +249,12 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
             w_mul_outputs(index) := stage.out
           } else if (index % 2 == 1) { // stage with non trivial multiplier
             val w_mul_input = Mux(
-              isStageActive(index) && isStageOdd(index),
+              isActiveOdd(index),
               stage.out,
               Mux(isStageActive(index), w_stage_outputs(index + 1), 0.U.asTypeOf(stage.in))
             ).asTypeOf(params.inDataType)
             val w_twiddle = Mux(
-              isStageActive(index) && isStageOdd(index),
+              isActiveOdd(index),
               w_twiddles(index),
               Mux(isStageActive(index), w_twiddles(index + 1), 0.U.asTypeOf(params.twiddleType))
             ).asTypeOf(params.twiddleType)
@@ -247,14 +267,14 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
               }
             }
             w_stage_out := Mux(
-              !(isStageActive(index) && isStageOdd(index)),
+              !isActiveOdd(index),
               ShiftRegister(w_inverted_data, complexMulLatency, true.B),
               w_mul_outputs(index)
             )
           } else {
             w_mul_outputs(index) := w_mul_outputs(index - 1).asTypeOf(w_mul_outputs(index))
             w_stage_out := Mux(
-              !(isStageActive(index) && isStageOdd(index)),
+              !isActiveOdd(index),
               ShiftRegister(w_inverted_data, complexMulLatency, true.B),
               w_mul_outputs(index)
             )
@@ -282,7 +302,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
         // Non-trivial twiddle factors
         else if ((evenNoOfStages && index % 2 == 0) || (!evenNoOfStages && index % 2 == 1)) {
           val w_mul_input = Mux(
-            isStageActive(index) && isStageOdd(index),
+            isActiveOdd(index),
             prev_out.asTypeOf(stage.in),
             Mux(
               isStageActive(index),
@@ -290,7 +310,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
               0.U.asTypeOf(stage.in))
           ).asTypeOf(params.inDataType)
           val w_twiddle = Mux(
-            isStageActive(index) && isStageOdd(index),
+            isActiveOdd(index),
             w_twiddles(index),
             Mux(isStageActive(index),
               if (evenNoOfStages) w_twiddles(index - 1) else w_twiddles(index + 1),
@@ -305,7 +325,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
             }
           }
           w_stage_out := Mux(
-            !(isStageActive(index) && isStageOdd(index)),
+            !isActiveOdd(index),
             ShiftRegister(w_inverted_data, complexMulLatency, true.B),
             w_mul_outputs(index)
           )
@@ -314,7 +334,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
           if (evenNoOfStages) w_mul_outputs(index) := w_mul_outputs(index + 1)
           else w_mul_outputs(index) := w_mul_outputs(index - 1)
           w_stage_out := Mux(
-            !(isStageActive(index) && isStageOdd(index)),
+            !isActiveOdd(index),
             ShiftRegister(w_inverted_data, complexMulLatency, true.B),
             w_mul_outputs(index)
           )
@@ -331,7 +351,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   when(r_counter_delay === (w_fft_size - 1.U) && w_i_en_last_stage) { r_pipeline_full := true.B }
   // Find last stage, depends on DIF/DIT
   if (isItDIF) {w_stage_tail := ShiftRegister(w_stage_outputs.last, complexMulLatency, true.B)}
-  else { w_stage_tail := w_stage_outputs(r_num_stages - 1.U) }
+  else { w_stage_tail := w_stage_outputs((r_num_stages - 1.U).asTypeOf(UInt(log2Ceil(noOfStages).W))) }
   // Generate valid for the last stage
   w_last_stage_valid := ShiftRegisterWithReset(
     r_pipeline_full && w_i_en_last_stage,
