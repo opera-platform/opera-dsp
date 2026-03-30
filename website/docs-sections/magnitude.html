@@ -1,0 +1,28 @@
+<h2 id="magnitude">Magnitude Block</h2>
+<p>
+  Computes the magnitude (or approximation) of a complex signal. Supports squared magnitude,
+  JPL magnitude approximation, and log2 computation for real input signals.
+</p>
+<p>
+  <a href="docs/log-magnitude/index.html">→ Full Magnitude Documentation</a>
+</p>
+
+<h3>RTL Generation</h3>
+<pre><code><span class="cm"># AXI4</span>
+$ make rtl_magnitude_axi4
+
+<span class="cm"># TileLink</span>
+$ make rtl_magnitude_tl</code></pre>
+
+<h3>Tests</h3>
+<pre><code><span class="cm"># AXI4</span>
+$ make test_magnitude_axi4
+
+<span class="cm"># TileLink</span>
+$ make test_magnitude_tl
+
+<span class="cm"># All (takes a long time)</span>
+$ make test_magnitude_all</code></pre>
+<p>
+  1,368 tests per variant, ~60 minutes each. Results in <code>./log-magnitude/test_run_dir</code>.
+</p>

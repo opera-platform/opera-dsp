@@ -1,0 +1,37 @@
+[
+  {
+    "date": "July 16, 2025",
+    "title": "OPERA-DSP v0.3 Released",
+    "url": "https://github.com/opera-platform/opera-dsp/releases/tag/v0.3",
+    "body": "The latest release of OPERA-DSP is now available. Version 0.3 brings continued improvements to the core IP blocks and build system. Check the release notes on GitHub for full details on what's changed.",
+    "tag": "Release"
+  },
+  {
+    "date": "2025",
+    "title": "Magnitude Block - Squared, JPL & Log2 Support",
+    "url": "https://github.com/opera-platform/opera-dsp/releases",
+    "body": "The Magnitude block now supports multiple computation modes: squared magnitude, JPL (Jet Propulsion Laboratory) approximation, and log2 of real signals. Both AXI4 and TileLink interfaces are available with full test coverage - 1,368 tests per variant.",
+    "tag": "Feature"
+  },
+  {
+    "date": "2025",
+    "title": "Windowing Block Available",
+    "url": "https://github.com/opera-platform/opera-dsp/releases",
+    "body": "The Windowing IP core is ready for use. Apply window functions to your radar data before FFT to reduce spectral leakage. Supports configurable parameters with both AXI4 and TileLink variants, backed by 672 tests per interface.",
+    "tag": "Feature"
+  },
+  {
+    "date": "2025",
+    "title": "PreProcessing Block & Initial Release",
+    "url": "https://github.com/opera-platform/opera-dsp/releases",
+    "body": "The first OPERA-DSP release introduced the PreProcessing block for formatting raw ADC data from FMCW radar sensors. The block comes with comprehensive test coverage (4,884 tests) and support for both AXI4 and TileLink bus interfaces.",
+    "tag": "Release"
+  },
+  {
+    "date": "2024",
+    "title": "Project Announcement",
+    "url": "https://github.com/opera-platform/opera-dsp",
+    "body": "OPERA-DSP is an open-source project aiming to make FMCW radar signal processing more accessible to researchers and developers. Built with Chisel and licensed under Apache 2.0, the project provides reusable hardware IP cores for the radar DSP pipeline.",
+    "tag": "Announcement"
+  }
+]

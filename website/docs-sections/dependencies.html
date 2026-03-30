@@ -1,0 +1,25 @@
+<h2 id="dependencies">Dependencies</h2>
+
+<h3>OpenJDK &amp; SBT</h3>
+<p>OPERA-DSP is based on Chisel. You'll need SBT and OpenJDK installed:</p>
+<pre><code><span class="cm"># Install OpenJDK on Debian/Ubuntu</span>
+$ sudo apt install openjdk-17-jdk</code></pre>
+<p>For SBT installation, follow the <a href="https://www.scala-sbt.org/1.x/docs/Installing-sbt-on-Linux.html" target="_blank">official SBT guide</a>.</p>
+
+<h3>Git</h3>
+<pre><code>$ sudo apt install git</code></pre>
+
+<h3>OSS CAD Suite</h3>
+<p>
+  To run tests, you'll need open-source tools like Verilator. The easiest way to install them
+  is via the <a href="https://github.com/YosysHQ/oss-cad-suite-build" target="_blank">OSS CAD Suite</a>
+  from YosysHQ. Download the release for your system and add it to your PATH.
+</p>
+
+<h3>Sphinx (for documentation)</h3>
+<pre><code><span class="cm"># Install Sphinx and the RTD theme</span>
+$ pip install sphinx sphinx_rtd_theme
+
+<span class="cm"># For PDF output, install TeX Live</span>
+$ sudo apt install texlive-base texlive-latex-recommended \
+    texlive-latex-extra texlive-fonts-recommended</code></pre>

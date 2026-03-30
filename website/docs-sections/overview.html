@@ -1,0 +1,16 @@
+<h1 id="overview">Overview</h1>
+<p>
+  OPERA-DSP is an open-source FMCW radar DSP hardware library. It provides essential IP cores
+  for radar signal processing, including windowing functions, FFT, magnitude computation,
+  and CFAR detection - all built with <a href="https://www.chisel-lang.org/" target="_blank">Chisel</a>.
+</p>
+
+<div class="callout">
+  <p><strong>Language breakdown:</strong> Scala 96.9% · Makefile 2.7% · Verilog 0.4%</p>
+</div>
+
+<p>
+  Each block supports both AXI4 and TileLink interfaces and can be used standalone or
+  integrated into a larger SoC design. Generated SystemVerilog output is placed in the
+  <code>./rtl</code> directory.
+</p>

@@ -1,0 +1,24 @@
+<h2 id="preprocessing">PreProcessing Block</h2>
+<p>
+  The PreProcessing block formats raw ADC data from the FMCW radar sensor, ensuring
+  compatibility with subsequent DSP blocks.
+</p>
+<p>
+  <a href="docs/preprocessing/index.html">→ Full PreProcessing Documentation</a>
+</p>
+
+<h3>RTL Generation</h3>
+<pre><code><span class="cm"># AXI4 variant</span>
+$ make rtl_preprocessing_axi4
+
+<span class="cm"># TileLink variant</span>
+$ make rtl_preprocessing_tl</code></pre>
+<p>Generated SystemVerilog will be in <code>./rtl</code>.</p>
+
+<h3>Tests</h3>
+<pre><code>$ make test_preprocessing</code></pre>
+<p>
+  By default, 4,884 tests will run (approximately 2 hours). Results go to <code>./test_run_dir</code>.
+  To reduce the number of tests, modify parameters in
+  <code>PreProcessingSpec.scala</code>.
+</p>

@@ -1,0 +1,47 @@
+{
+  "sidebar": [
+    {
+      "label": "Getting Started",
+      "links": [
+        { "title": "Overview", "href": "#overview" },
+        { "title": "Dependencies", "href": "#dependencies" },
+        { "title": "Standalone Setup", "href": "#standalone" }
+      ]
+    },
+    {
+      "label": "IP Cores",
+      "links": [
+        { "title": "PreProcessing", "href": "#preprocessing" },
+        { "title": "Windowing", "href": "#windowing" },
+        { "title": "Magnitude", "href": "#magnitude" },
+        { "title": "FFT", "href": "#fft" },
+        { "title": "CFAR", "href": "#cfar" }
+      ]
+    },
+    {
+      "label": "Sphinx Docs",
+      "links": [
+        { "title": "PreProcessing", "href": "docs/preprocessing/index.html" },
+        { "title": "Windowing", "href": "docs/windowing/index.html" },
+        { "title": "Magnitude", "href": "docs/log-magnitude/index.html" }
+      ]
+    },
+    {
+      "label": "Resources",
+      "links": [
+        { "title": "Building Docs", "href": "#documentation" }
+      ]
+    }
+  ],
+  "sections": [
+    "overview",
+    "dependencies",
+    "standalone",
+    "preprocessing",
+    "windowing",
+    "magnitude",
+    "fft",
+    "cfar",
+    "documentation"
+  ]
+}
