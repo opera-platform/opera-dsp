@@ -22,6 +22,7 @@
   --font: 'DM Sans', -apple-system, sans-serif;
   --mono: 'JetBrains Mono', monospace;
   --nav-bg: rgba(250, 250, 249, 0.85);
+  --focus-ring: rgba(22, 163, 74, 0.28);
 }
 
 /* Dark theme overrides - applied when data-theme="dark" is set on <html> */
@@ -44,6 +45,7 @@
   --code-text: #e6edf3;
   --green: #4ade80;
   --nav-bg: rgba(13, 17, 23, 0.85);
+  --focus-ring: rgba(74, 222, 128, 0.24);
 }
 
 /* Theme toggle button */
@@ -87,6 +89,16 @@
 /* Smooth scroll for anchor links (e.g. docs sidebar navigation) */
 html { scroll-behavior: smooth; }
 
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
   font-family: var(--font);
   color: var(--text);
@@ -97,6 +109,13 @@ body {
 }
 
 a { color: var(--text); }
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--focus-ring);
+}
 
 .container {
   max-width: 960px;
@@ -163,6 +182,13 @@ a { color: var(--text); }
 
 .nav-links a:hover { color: var(--text); }
 
+.nav-links a[aria-current="page"],
+.mobile-menu a[aria-current="page"],
+.footer-right a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 500;
+}
+
 .nav-github {
   display: flex !important;
   align-items: center;
@@ -210,6 +236,7 @@ a { color: var(--text); }
   z-index: 99;
 }
 
+.mobile-menu[hidden] { display: none !important; }
 .mobile-menu.open { display: flex; }
 
 .mobile-menu a {
@@ -251,7 +278,8 @@ a { color: var(--text); }
   letter-spacing: 0.02em;
 }
 
-.hero h1 {
+.hero h1,
+.hero h2 {
   font-size: clamp(2.2rem, 5vw, 3.4rem);
   font-weight: 700;
   line-height: 1.12;
@@ -697,6 +725,10 @@ a { color: var(--text); }
   border-top: 1px solid var(--border-light);
 }
 
+.docs-content [id] {
+  scroll-margin-top: 88px;
+}
+
 .docs-content h3 {
   font-size: 1.05rem;
   font-weight: 600;
@@ -860,4 +892,9 @@ a { color: var(--text); }
   padding: 3px 10px;
   border-radius: 100px;
   margin-top: 12px;
+}
+
+.page-status {
+  color: var(--text-tertiary);
+  font-size: 0.94rem;
 }
