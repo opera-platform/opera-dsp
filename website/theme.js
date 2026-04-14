@@ -1,23 +1,58 @@
 // Loaded in <head> to set the theme before first paint, preventing flash of wrong theme.
-(function() {
-  // Read saved preference, default to light
-  var theme = 'light';
-  try { theme = localStorage.getItem('theme') || 'light'; } catch(e) {}
-  if (theme !== 'dark' && theme !== 'light') theme = 'light';
+(function () {
+  var storageKey = 'theme';
 
-  // If no saved preference, respect OS-level dark mode setting
-  if (theme === 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    try { if (!localStorage.getItem('theme')) theme = 'dark'; } catch(e) {}
+  function getStoredTheme() {
+    try {
+      return localStorage.getItem(storageKey);
+    } catch (error) {
+      return null;
+    }
   }
 
-  // Apply theme via data attribute (drives CSS variable switching)
-  document.documentElement.setAttribute('data-theme', theme);
-})();
+  function getPreferredTheme() {
+    var storedTheme = getStoredTheme();
 
-// Toggles between light and dark theme, persists choice to localStorage
-function toggleTheme() {
-  var current = document.documentElement.getAttribute('data-theme') || 'light';
-  var next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  try { localStorage.setItem('theme', next); } catch(e) {}
-}
+    // An explicit user choice always wins over the OS preference.
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      return storedTheme;
+    }
+
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+
+    return 'light';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+
+  function toggleTheme() {
+    var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+    applyTheme(nextTheme);
+
+    try {
+      localStorage.setItem(storageKey, nextTheme);
+    } catch (error) {
+      // Ignore storage failures and keep the in-memory theme change.
+    }
+
+    return nextTheme;
+  }
+
+  window.OPERA_THEME = {
+    applyTheme: applyTheme,
+    getTheme: function () {
+      return document.documentElement.getAttribute('data-theme') || 'light';
+    },
+    toggleTheme: toggleTheme
+  };
+
+  // Keep the legacy global available because the HTML is still plain static pages.
+  window.toggleTheme = toggleTheme;
+  applyTheme(getPreferredTheme());
+})();
