@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="theme.js"></script>
+  <script src="site-config.js"></script>
 </head>
 <body>
 
@@ -21,7 +22,7 @@
       <img src="images/logo-dark.svg" alt="OPERA-DSP" width="560" class="logo-dark">
     </div>
     <div class="hero-badge">v0.3 - Latest Release</div>
-    <h2 class="hero-tagline">Open-source FMCW radar<br><span class="hero-accent">signal processing.</span></h2>
+    <h1 class="hero-tagline">Open-source FMCW radar<br><span class="hero-accent">signal processing.</span></h1>
     <p class="hero-sub">
       OPERA-DSP is a hardware IP library for FMCW radar DSP - built with Chisel,
       providing essential cores for windowing, FFT, magnitude computation, and CFAR detection.
@@ -30,8 +31,8 @@
     <div class="hero-actions">
       <a href="docs.html" class="btn btn-primary">Get Started</a>
       <div class="hero-install">
-        <code>git clone https://github.com/opera-platform/opera-dsp.git</code>
-        <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy">
+        <code data-site-clone-command></code>
+        <button class="copy-btn" type="button" data-copy-source="cloneCommand" aria-label="Copy install command">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
         </button>
       </div>
@@ -89,7 +90,7 @@
           <span class="code-filename">terminal</span>
         </div>
         <pre><code><span class="cm"># Clone the repository</span>
-$ git clone https://github.com/opera-platform/opera-dsp.git
+$ <span data-site-clone-command></span>
 $ cd opera-dsp
 
 <span class="cm"># Clone required submodules (rocket-chip, dsptools, rocket-dsp-utils)</span>
@@ -139,7 +140,7 @@ $ make docs_windowing_html</code></pre>
       <p>Explore the docs, try the IP cores, or contribute to the project.</p>
       <div class="cta-actions">
         <a href="docs.html" class="btn btn-primary">Read the Docs</a>
-        <a href="https://github.com/opera-platform/opera-dsp" target="_blank" class="btn btn-outline">View on GitHub</a>
+        <a href="#" data-site-repo-link class="btn btn-outline">View on GitHub</a>
       </div>
     </div>
   </section>

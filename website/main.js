@@ -1,113 +1,411 @@
-// Page-specific functionality for index, news, and docs pages.
-// Each feature is wrapped in an IIFE so it only runs when its target elements exist.
+// Initializes page-level behavior for the static site.
+(function () {
+  var site = window.OPERA_SITE;
+  var copyIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+  var successIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+  var errorIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+  var copyResetDelayMs = 2000;
 
-// Copies the git clone command to clipboard and shows a check mark for ~2 seconds (index.html)
-function copyInstall(btn) {
-  navigator.clipboard.writeText('git clone https://github.com/opera-platform/opera-dsp.git');
-  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
-  setTimeout(function() {
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
-  }, 2000);
-}
+  function init() {
+    applySiteContent();
+    initCopyButtons();
+    initScrollReveal();
+    initNewsPage();
+    initDocsPage();
+  }
 
-// Fade-in animation for feature cards, code block, and CTA when they scroll into view (see index.html)
-(function() {
-  var targets = document.querySelectorAll('.feature-card, .code-block, .cta');
-  if (targets.length === 0) return;
-  var observer = new IntersectionObserver(function(entries) {
-    entries.forEach(function(e) {
-      if (e.isIntersecting) e.target.classList.add('visible');
+  function applySiteContent() {
+    if (!site) {
+      return;
+    }
+
+    // Let HTML opt into shared project metadata with data attributes instead of
+    // duplicating values in multiple templates.
+    updateTextContent('[data-site-clone-command]', site.cloneCommand);
+    updateLinkHref('[data-site-repo-link]', site.repoUrl);
+  }
+
+  function updateTextContent(selector, value) {
+    document.querySelectorAll(selector).forEach(function (element) {
+      element.textContent = value;
     });
-  }, { threshold: 0.1 });
-  targets.forEach(function(el) { observer.observe(el); });
-})();
+  }
 
-// Fetches news.json and renders each item as an article card (see news.html)
-(function() {
-  var container = document.getElementById('news-list');
-  if (!container) return;
-  fetch('news.json')
-    .then(function(res) {
-      if (!res.ok) throw new Error(res.statusText);
-      return res.json();
-    })
-    .then(function(items) {
-      container.innerHTML = items.map(function(item) {
-        return '<article class="news-item">'
-          + '<div class="news-date">' + item.date + '</div>'
-          + '<h2><a href="' + item.url + '" target="_blank">' + item.title + '</a></h2>'
-          + '<p>' + item.body + '</p>'
-          + '<span class="news-tag">' + item.tag + '</span>'
-          + '</article>';
-      }).join('');
-    })
-    .catch(function() {
-      container.innerHTML = '<p style="color:var(--text-tertiary)">Failed to load news. Please try refreshing the page.</p>';
+  function updateLinkHref(selector, href) {
+    document.querySelectorAll(selector).forEach(function (link) {
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
     });
-})();
+  }
 
-// Loads the docs sidebar and content sections from docs.json and HTML partials (see docs.html)
-(function() {
-  var sidebar = document.getElementById('docs-sidebar');
-  var content = document.getElementById('docs-content');
-  if (!sidebar || !content) return;
+  function initCopyButtons() {
+    document.querySelectorAll('[data-copy-source], [data-copy-text]').forEach(function (button) {
+      setCopyButtonState(button, 'idle');
+      button.addEventListener('click', function () {
+        var text = resolveCopyText(button);
 
-  fetch('docs.json')
-    .then(function(res) {
-      if (!res.ok) throw new Error(res.statusText);
-      return res.json();
-    })
-    .then(function(data) {
-      // Build sidebar navigation from grouped links defined in docs.json
-      sidebar.innerHTML = data.sidebar.map(function(group) {
-        return '<div class="docs-sidebar-group">'
-          + '<div class="docs-sidebar-label">' + group.label + '</div>'
-          + group.links.map(function(link) {
-              return '<a href="' + link.href + '">' + link.title + '</a>';
-            }).join('')
-          + '</div>';
-      }).join('');
+        if (!text) {
+          setCopyButtonState(button, 'error');
+          return;
+        }
 
-      // Fetch each section's HTML partial (e.g. docs-sections/overview.html) in order
-      return Promise.all(data.sections.map(function(name) {
-        return fetch('docs-sections/' + name + '.html')
-          .then(function(res) {
-            if (!res.ok) throw new Error(name + ': ' + res.statusText);
-            return res.text();
+        copyText(text)
+          .then(function () {
+            setCopyButtonState(button, 'success');
+          })
+          .catch(function () {
+            setCopyButtonState(button, 'error');
           });
-      }));
-    })
-    .then(function(htmlParts) {
-      // Combine all section partials into the main content area
-      content.innerHTML = htmlParts.join('\n');
+      });
+    });
+  }
 
-      // highlights the sidebar link matching the currently visible section.
-      // Throttled with requestAnimationFrame to avoid excessive reflows.
-      var sidebarLinks = document.querySelectorAll('.docs-sidebar a');
-      var sections = document.querySelectorAll('.docs-content [id]');
-      var ticking = false;
-      window.addEventListener('scroll', function() {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(function() {
-          var current = '';
-          sections.forEach(function(s) {
-            if (window.scrollY >= s.offsetTop - 100) current = s.id;
-          });
-          sidebarLinks.forEach(function(a) {
-            a.classList.toggle('active', a.getAttribute('href') === '#' + current);
-          });
-          ticking = false;
-        });
+  function resolveCopyText(button) {
+    var source = button.getAttribute('data-copy-source');
+
+    if (source && site && typeof site[source] === 'string') {
+      return site[source];
+    }
+
+    return button.getAttribute('data-copy-text') || '';
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return fallbackCopyText(text);
+      });
+    }
+
+    return fallbackCopyText(text);
+  }
+
+  function fallbackCopyText(text) {
+    return new Promise(function (resolve, reject) {
+      var textArea = document.createElement('textarea');
+
+      // Keep the fallback off-screen and temporary so it does not affect layout
+      // or leave behind focusable DOM once the copy attempt finishes.
+      textArea.value = text;
+      textArea.setAttribute('readonly', '');
+      textArea.style.position = 'fixed';
+      textArea.style.top = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+
+      try {
+        if (!document.execCommand('copy')) {
+          throw new Error('Copy command was rejected.');
+        }
+
+        resolve();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textArea.remove();
+      }
+    });
+  }
+
+  function setCopyButtonState(button, state) {
+    var labels = {
+      idle: 'Copy install command',
+      success: 'Copied install command',
+      error: 'Unable to copy install command'
+    };
+    var icons = {
+      idle: copyIcon,
+      success: successIcon,
+      error: errorIcon
+    };
+
+    button.innerHTML = icons[state] || copyIcon;
+    button.setAttribute('aria-label', labels[state] || labels.idle);
+
+    if (button._copyResetTimer) {
+      window.clearTimeout(button._copyResetTimer);
+    }
+
+    if (state !== 'idle') {
+      button._copyResetTimer = window.setTimeout(function () {
+        setCopyButtonState(button, 'idle');
+      }, copyResetDelayMs);
+    }
+  }
+
+  function initScrollReveal() {
+    var targets = Array.prototype.slice.call(document.querySelectorAll('.feature-card, .code-block, .cta'));
+
+    if (!targets.length) {
+      return;
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach(function (element) {
+        element.classList.add('visible');
+      });
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) {
+          return;
+        }
+
+        // These reveals only need to happen once, so stop observing after the
+        // element becomes visible.
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.1 });
+
+    targets.forEach(function (element) {
+      observer.observe(element);
+    });
+  }
+
+  function initNewsPage() {
+    var container = document.getElementById('news-list');
+
+    if (!container || !site) {
+      return;
+    }
+
+    fetchJson(site.paths.newsFeed)
+      .then(function (items) {
+        renderNewsItems(container, items);
+      })
+      .catch(function () {
+        renderStatusMessage(container, 'Failed to load news. Please try refreshing the page.');
+      });
+  }
+
+  function renderNewsItems(container, items) {
+    var fragment = document.createDocumentFragment();
+
+    items.forEach(function (item) {
+      fragment.appendChild(createNewsItem(item));
+    });
+
+    container.replaceChildren(fragment);
+  }
+
+  function createNewsItem(item) {
+    var article = createElement('article', 'news-item');
+    var date = createElement('div', 'news-date', item.date || '');
+    var heading = createElement('h2');
+    var link = createElement('a', '', item.title || 'Untitled update');
+    var body = createElement('p', '', item.body || '');
+    var tag = createElement('span', 'news-tag', item.tag || 'Update');
+
+    link.href = item.url || site.repoUrl;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+
+    heading.appendChild(link);
+    article.appendChild(date);
+    article.appendChild(heading);
+    article.appendChild(body);
+    article.appendChild(tag);
+
+    return article;
+  }
+
+  function initDocsPage() {
+    var sidebar = document.getElementById('docs-sidebar');
+    var content = document.getElementById('docs-content');
+
+    if (!sidebar || !content || !site) {
+      return;
+    }
+
+    fetchJson(site.paths.docsManifest)
+      .then(function (data) {
+        renderDocsSidebar(sidebar, data.sidebar || []);
+
+        return loadDocsSections(data.sections || []);
+      })
+      .then(function (fragment) {
+        content.replaceChildren(fragment);
+        initDocsSectionTracking(sidebar, content);
+        scrollToHashTarget(content);
+      })
+      .catch(function () {
+        renderStatusMessage(content, 'Failed to load documentation. Please try refreshing the page.');
+      });
+  }
+
+  function renderDocsSidebar(sidebar, groups) {
+    var fragment = document.createDocumentFragment();
+
+    groups.forEach(function (group) {
+      var groupElement = createElement('div', 'docs-sidebar-group');
+      var label = createElement('div', 'docs-sidebar-label', group.label || '');
+
+      groupElement.appendChild(label);
+
+      (group.links || []).forEach(function (item) {
+        var link = createElement('a', '', item.title || '');
+
+        link.href = item.href || '#';
+
+        if (isExternalDocsLink(item.href)) {
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+        }
+
+        groupElement.appendChild(link);
       });
 
-      // If the URL has a hash (e.g. docs.html#windowing), scroll to that section
-      if (window.location.hash) {
-        var target = document.querySelector(window.location.hash);
-        if (target) target.scrollIntoView();
-      }
-    })
-    .catch(function() {
-      content.innerHTML = '<p style="color:var(--text-tertiary)">Failed to load documentation. Please try refreshing the page.</p>';
+      fragment.appendChild(groupElement);
     });
+
+    sidebar.replaceChildren(fragment);
+  }
+
+  function isExternalDocsLink(href) {
+    return typeof href === 'string' && href.indexOf('#') !== 0;
+  }
+
+  function loadDocsSections(sectionNames) {
+    return Promise.all(sectionNames.map(function (name) {
+      return fetchText(site.paths.docsSectionsDir + name + '.html');
+    })).then(function (htmlParts) {
+      var fragment = document.createDocumentFragment();
+      var wrapper = createElement('div');
+
+      // Parse all partials in a detached node first, then move the resulting
+      // elements into the live container in a single pass.
+      wrapper.innerHTML = htmlParts.join('\n');
+
+      while (wrapper.firstChild) {
+        fragment.appendChild(wrapper.firstChild);
+      }
+
+      return fragment;
+    });
+  }
+
+  function initDocsSectionTracking(sidebar, content) {
+    var sectionLinks = Array.prototype.slice.call(sidebar.querySelectorAll('a[href^="#"]'));
+    var linkById = {};
+
+    if (!sectionLinks.length) {
+      return;
+    }
+
+    sectionLinks.forEach(function (link) {
+      var id = link.getAttribute('href').slice(1);
+
+      linkById[id] = link;
+      link.addEventListener('click', function () {
+        setActiveDocsLink(linkById, id);
+      });
+    });
+
+    var sections = sectionLinks.map(function (link) {
+      return content.querySelector(link.getAttribute('href'));
+    }).filter(Boolean);
+
+    function activateFromHash() {
+      var id = window.location.hash.replace(/^#/, '');
+
+      if (id && linkById[id]) {
+        setActiveDocsLink(linkById, id);
+        return;
+      }
+
+      if (sections[0]) {
+        setActiveDocsLink(linkById, sections[0].id);
+      }
+    }
+
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function (entries) {
+        var visibleEntries = entries.filter(function (entry) {
+          return entry.isIntersecting;
+        }).sort(function (left, right) {
+          return left.boundingClientRect.top - right.boundingClientRect.top;
+        });
+
+        // When multiple sections overlap the viewport, prefer the one nearest
+        // the top so the sidebar state matches what readers are focused on.
+        if (visibleEntries[0]) {
+          setActiveDocsLink(linkById, visibleEntries[0].target.id);
+        }
+      }, {
+        rootMargin: '-120px 0px -55% 0px',
+        threshold: [0.1, 0.5, 1]
+      });
+
+      sections.forEach(function (section) {
+        observer.observe(section);
+      });
+    }
+
+    window.addEventListener('hashchange', activateFromHash);
+    activateFromHash();
+  }
+
+  function setActiveDocsLink(linkById, activeId) {
+    Object.keys(linkById).forEach(function (id) {
+      linkById[id].classList.toggle('active', id === activeId);
+    });
+  }
+
+  function scrollToHashTarget(content) {
+    if (!window.location.hash) {
+      return;
+    }
+
+    var target = content.querySelector(window.location.hash);
+
+    if (target) {
+      target.scrollIntoView();
+    }
+  }
+
+  function renderStatusMessage(container, message) {
+    var status = createElement('p', 'page-status', message);
+
+    container.replaceChildren(status);
+  }
+
+  function fetchJson(path) {
+    return fetch(path).then(function (response) {
+      if (!response.ok) {
+        throw new Error(response.statusText);
+      }
+
+      return response.json();
+    });
+  }
+
+  function fetchText(path) {
+    return fetch(path).then(function (response) {
+      if (!response.ok) {
+        throw new Error(response.statusText);
+      }
+
+      return response.text();
+    });
+  }
+
+  function createElement(tagName, className, text) {
+    var element = document.createElement(tagName);
+
+    if (className) {
+      element.className = className;
+    }
+
+    if (typeof text === 'string') {
+      element.textContent = text;
+    }
+
+    return element;
+  }
+
+  init();
 })();
