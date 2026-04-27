@@ -22,12 +22,6 @@ object QuarterWaveSineLUT {
 
 /** Twiddle factors from Quarter-wave sine LUT */
 object TwiddleFromLUT {
-  private def radix22TwiddleIDs(stageN: Int): Seq[Int] = {
-    require(stageN >= 4, "FFT stage size must be at least 4")
-    val q = stageN / 4
-    Seq.fill(q)(0) ++ Seq.tabulate(q)(i => i * 2) ++ Seq.tabulate(q)(i => i) ++ Seq.tabulate(q)(i => i * 3)
-  }
-
   def apply[T <: Data : Real](address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
     require(stageN >= 4           ,  "stage must be at least 4")
     require(stageN % 4 == 0       ,  "stage must be divisible by 4")
@@ -36,15 +30,25 @@ object TwiddleFromLUT {
 
     val stride   = FFT_size / stageN
     val nDiv4    = stageN / 4
-    val idWidth = log2Ceil(stageN)
-    // logical twiddle index k for this stage (radix-2^2 pattern)
-    val twiddleIDs: Seq[Int] = radix22TwiddleIDs(stageN)
-    val twiddleIdxVec = VecInit(twiddleIDs.map(i => i.U(idWidth.W)))
-    val k = twiddleIdxVec(address)
+    val idWidth  = log2Ceil(stageN)
+    val lowWidth = log2Ceil(nDiv4)
+
+    // logical twiddle index k for this radix-2^2 stage:
+    // address quadrants select 0, 2a, a, or 3a.
+    val addressInStage = address(idWidth - 1, 0)
+    val addressQuadrant = addressInStage(idWidth - 1, idWidth - 2)
+    val a = if (lowWidth == 0) 0.U(idWidth.W) else addressInStage(lowWidth - 1, 0).asTypeOf(UInt(idWidth.W))
+    val k = MuxLookup(addressQuadrant, 0.U(idWidth.W))(Seq(
+      0.U -> 0.U(idWidth.W),
+      1.U -> (a << 1).asTypeOf(UInt(idWidth.W)),
+      2.U -> a,
+      3.U -> (a + (a << 1)).asTypeOf(UInt(idWidth.W))
+    ))
+
     // find quadrant + base angle index
     val nDiv4U = nDiv4.U(idWidth.W)
-    val q = (k / nDiv4U)(1, 0) // quadrant: 0..3
-    val m = k % nDiv4U         // 0 .. nDiv4-1
+    val q = if (lowWidth == 0) k(idWidth - 1, 0) else k(idWidth - 1, lowWidth) // quadrant: 0..3
+    val m = if (lowWidth == 0) 0.U(idWidth.W) else k(lowWidth - 1, 0).asTypeOf(UInt(idWidth.W))
     // Mirror within quadrant
     val mirror = Mux(q(0), nDiv4U - m, m).asTypeOf(UInt(idWidth.W)) // if odd quadrant, mirror
     val sineID = mirror(log2Ceil(nDiv4 + 1) - 1, 0)
@@ -53,20 +57,11 @@ object TwiddleFromLUT {
     val sinA = LUT(twiddleID)             // sin(a)
     val cosA = LUT((FFT_size / 4).U - twiddleID) // cos(a) = sin(π/2 - a)
     // find quadrant-based signs
-    val cosNeg = Wire(Bool())
-    val sinNeg = Wire(Bool())
-    cosNeg := false.B
-    sinNeg := false.B
-    switch(q) {
-      is(0.U) { cosNeg := false.B; sinNeg := false.B } // + +
-      is(1.U) { cosNeg := true.B;  sinNeg := false.B } // - +
-      is(2.U) { cosNeg := true.B;  sinNeg := true.B  } // - -
-      is(3.U) { cosNeg := false.B; sinNeg := true.B  } // + -
-    }
+    val cosNeg = q(1) ^ q(0)
+    val sinNeg = q(1)
     val cosTheta = Mux(cosNeg, -cosA, cosA)
     val sinTheta = Mux(sinNeg, -sinA, sinA)
     // Return: W_stageN^k = cos(θ) - j sin(θ)
     DspComplex.wire(real = cosTheta, imag = -sinTheta)
   }
 }
-
