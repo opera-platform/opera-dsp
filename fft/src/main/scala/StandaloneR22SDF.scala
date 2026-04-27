@@ -26,8 +26,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   }
 
   // Latencies
-  private val complexMulLatency = if (params.use4Muls) params.numAddPipes + params.numMulPipes
-                                  else 2 * params.numAddPipes + params.numMulPipes
+  private val complexMulLatency = if (params.use4Muls) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
   private val outputLatency     = params.numAddPipes + complexMulLatency
   private val latency           = outputLatency * noOfStages
 
@@ -37,7 +36,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   private val r_counters_msb    = RegInit(VecInit(Seq.fill(noOfStages)(false.B)))
   private val inputSampleCount  = RegInit(0.U(log2Ceil(params.fftSize).W))
   private val acceptedFrameCount = RegInit(0.U(1.W))
-  private val lastStageSampleCount = RegInit(0.U(log2Ceil(params.fftSize).W))
+  private val outputSampleCount = RegInit(0.U(log2Ceil(params.fftSize).W))
 
   // Wires
   private val w_output           = Wire(params.outDataType)
@@ -66,8 +65,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   private val isShiftedAddress = if (params.runTime) activeStageCount(0) ^ (noOfStages & 1).B else false.B
   private val fftOrIfft        = r_fft_or_ifft.getOrElse(params.direction.B)
 
-  if (params.runTime) w_fft_size := 1.U << activeStageCount
-  else                w_fft_size := params.fftSize.U
+  w_fft_size := (if (params.runTime) 1.U << activeStageCount else params.fftSize.U)
 
   val inputFrameStart = io.in.fire && inputSampleCount === 0.U
   val inputFrameEnd   = io.in.fire && inputSampleCount === (w_fft_size - 1.U)
@@ -85,10 +83,8 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
     inputSampleCount := inputSampleCount + 1.U
   }
 
-  if (params.runTime && !isItDIF)
-    w_i_en_last_stage := w_stage_en((activeStageCount - 1.U).asTypeOf(UInt(log2Ceil(noOfStages).W)))
-  else
-    w_i_en_last_stage := w_stage_en(noOfStages - 1)
+  w_i_en_last_stage := (if (params.runTime && !isItDIF)
+    w_stage_en((activeStageCount - 1.U).asTypeOf(UInt(log2Ceil(noOfStages).W))) else w_stage_en(noOfStages - 1))
 
   // Stage-activity computation
   if (params.runTime) {
@@ -101,10 +97,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   }
 
   // Twiddle LUT wiring
-  w_lookup_address.zipWithIndex.foreach {
-    case (address, i) =>
-      address := selectedLookupAddress(i)
-  }
+  w_lookup_address.zipWithIndex.foreach { case (address, i) => address := selectedLookupAddress(i) }
   (0 until noOfStages by 2).dropRight(1).zipWithIndex.foreach {
     case (m, i) =>
       val stageN = 1 << (noOfStages - m)
@@ -173,33 +166,30 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
 
   io.in.ready := ~w_last_stage_valid
   private val shift_output = noOfStages.U * (params.expandLogic.sum != 0 || params.divBy2Reg).B
-  val lastStageLast = lastStageSampleCount === (w_fft_size - 1.U)
+  // o_last is generated only from the number of accepted output samples.
+  // It stays asserted with the final sample while the output is backpressured.
+  val outputLast = outputSampleCount === (w_fft_size - 1.U)
 
   if (latency == 0) {
     io.out.valid := w_last_stage_valid
     Utils.assignFftOutputByDirection(w_stage_tail, w_output, fftOrIfft)
     when(io.out.fire) {
-      lastStageSampleCount := Mux(lastStageLast, 0.U, lastStageSampleCount + 1.U)
+      outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
     }
-    io.o_last := io.out.valid && lastStageLast
+    io.o_last := io.out.valid && outputLast
   } else {
-    val outQueue = Module(new Queue(new Bundle {
-      val data = chiselTypeOf(w_stage_tail)
-      val last = Bool()
-    }, entries = latency + 1, pipe = true, flow = true))
-    outQueue.io.enq.bits.data := w_stage_tail
-    outQueue.io.enq.bits.last := lastStageLast
+    val outQueue = Module(new Queue(chiselTypeOf(w_stage_tail), entries = latency + 1, pipe = true, flow = true))
+    outQueue.io.enq.bits := w_stage_tail
     outQueue.io.enq.valid := w_last_stage_valid
     outQueue.io.deq.ready := io.out.ready
 
-    when(outQueue.io.enq.fire) {
-      lastStageSampleCount := Mux(lastStageLast, 0.U, lastStageSampleCount + 1.U)
-    }
-
     io.in.ready  := !sdfWarm || outQueue.io.enq.ready
     io.out.valid := outQueue.io.deq.valid
-    Utils.assignFftOutputByDirection(outQueue.io.deq.bits.data, w_output, fftOrIfft)
-    io.o_last := outQueue.io.deq.valid && outQueue.io.deq.bits.last
+    Utils.assignFftOutputByDirection(outQueue.io.deq.bits, w_output, fftOrIfft)
+    when(io.out.fire) {
+      outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
+    }
+    io.o_last := io.out.valid && outputLast
   }
 
   io.out.bits.real := w_output.real >> shift_output
@@ -220,6 +210,15 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
     w_twiddle_address(i) := 0.U
     w_twiddles(i)        := 0.U.asTypeOf(w_twiddles(i))
   }
+
+  private def stageActive(i: Int): Bool = if (params.runTime) runtimeStageActive.get(i) else true.B
+  private def stageActiveOdd(i: Int): Bool =
+    if (params.runTime) runtimeStageActive.get(i) && runtimeStageOdd.get(i) else staticStageOdd(i).B
+  private def zeroAs[A <: Data](data: A): A = 0.U.asTypeOf(data)
+  private def activeMux(i: Int, oddData: DspComplex[T], activeData: DspComplex[T], zeroType: DspComplex[T]): DspComplex[T] =
+    Mux(stageActiveOdd(i), oddData, Mux(stageActive(i), activeData, zeroAs(zeroType))).asTypeOf(zeroType)
+  private def mul(i: Int, in: DspComplex[T], tw: DspComplex[T], bpos: Int): Unit =
+    w_mul_outputs(i) := Utils.complexMul(in, tw, bpos, params.numAddPipes, params.numMulPipes, params.trimType, params.use4Muls)
 
   private def wireStageTwiddleControl(stage: R22SDF[T], i: Int, delay: Int): Unit = {
     if (params.runTime) {
@@ -256,13 +255,13 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   }
 
   private def wireTrivialInversion(stage: R22SDF[T], i: Int, delay: Int): Unit = {
-    if (isItDIF)
-      w_invert_signals(i) := ShiftRegister(
+    w_invert_signals(i) := (if (isItDIF) {
+      ShiftRegister(
         Mux(stage.io.o_counter < delay.U, Mux(stage.io.o_counter < (delay.U >> 1), false.B, true.B), false.B),
         params.numAddPipes, true.B)
-    else
-      w_invert_signals(i) := Mux(stage.io.o_counter < delay.U, false.B,
-        Mux(stage.io.o_counter < (delay * 3 / 2).U, false.B, true.B))
+    } else {
+      Mux(stage.io.o_counter < delay.U, false.B, Mux(stage.io.o_counter < (delay * 3 / 2).U, false.B, true.B))
+    })
     w_twiddle_address(i) := 0.U
     w_twiddles(i)        := 0.U.asTypeOf(w_twiddles(i))
   }
@@ -287,15 +286,12 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   }
 
   private def bypassOrInverted(index: Int, data: DspComplex[T], inverted: DspComplex[T]): DspComplex[T] =
-    if (params.runTime) Mux(!(runtimeStageActive.get(index) && runtimeStageOdd.get(index)), ShiftRegister(inverted, complexMulLatency, true.B), data)
+    if (params.runTime) Mux(!stageActiveOdd(index), ShiftRegister(inverted, complexMulLatency, true.B), data)
     else if (staticStageOdd(index)) data
     else ShiftRegister(inverted, complexMulLatency, true.B)
 
   /** Wire one DIF butterfly stage: route input, apply inversion/twiddle, return output. */
   private def connectDIFStage(stage: RadixIO[T], index: Int, prev_out: DspComplex[T], bpos: Int): DspComplex[T] = {
-    val active    = if (params.runTime) runtimeStageActive.get(index) else true.B
-    val activeOdd = if (params.runTime) runtimeStageActive.get(index) && runtimeStageOdd.get(index) else staticStageOdd(index).B
-
     // Stage input
     if (params.runTime) {
       when(runtimeStageActive.get(index)) {
@@ -312,25 +308,16 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
     val out = Wire(stage.out.cloneType)
 
     if (index == 0) {                                      // first stage: no twiddle multiply
-      when(active) {
-        w_mul_outputs(index) := inverted
-      }.otherwise {
-        w_mul_outputs(index) := 0.U.asTypeOf(stage.in)
-      }
+      w_mul_outputs(index) := Mux(stageActive(index), inverted, zeroAs(stage.in))
       out := ShiftRegister(w_mul_outputs(index), complexMulLatency, true.B)
     } else if (index == noOfStages - 1) {                  // last stage: pass through
       w_mul_outputs(index) := stage.out
       out := ShiftRegister(stage.out, complexMulLatency, true.B)
     } else if (index % 2 == 1) {                           // odd stage: non-trivial twiddle multiplier
       val mulIn = Wire(stage.in.cloneType)
-      mulIn := Mux(activeOdd, stage.out,
-        Mux(active, w_stage_outputs(index + 1), 0.U.asTypeOf(stage.in))
-      ).asTypeOf(stage.in)
-      val mulTw = Mux(activeOdd, w_twiddles(index),
-        Mux(active, w_twiddles(index + 1), 0.U.asTypeOf(params.twiddleType))
-      ).asTypeOf(params.twiddleType)
-      w_mul_outputs(index) := Utils.complexMul(
-        mulIn, mulTw, bpos, params.numAddPipes, params.numMulPipes, params.trimType, params.use4Muls)
+      mulIn := activeMux(index, stage.out, w_stage_outputs(index + 1), stage.in)
+      val mulTw = activeMux(index, w_twiddles(index), w_twiddles(index + 1), params.twiddleType)
+      mul(index, mulIn, mulTw, bpos)
       out := bypassOrInverted(index, w_mul_outputs(index), inverted)
     } else {                                               // even stage: forward previous multiplier result
       w_mul_outputs(index) := w_mul_outputs(index - 1).asTypeOf(w_mul_outputs(index))
@@ -341,18 +328,12 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
 
   /** Wire one DIT butterfly stage: apply twiddle/pass, route to stage input, return output. */
   private def connectDITStage(stage: RadixIO[T], index: Int, prev_out: DspComplex[T], bpos: Int): DspComplex[T] = {
-    val active    = if (params.runTime) runtimeStageActive.get(index) else true.B
-    val activeOdd = if (params.runTime) runtimeStageActive.get(index) && runtimeStageOdd.get(index) else staticStageOdd(index).B
     val inverted    = Utils.invertComplexData(prev_out, w_invert_signals(index))
     val w_stage_out = Wire(stage.in.cloneType)
     stage.in := w_stage_out
 
     if (index == noOfStages - 1) {                         // last stage: trivial -j only
-      when(active) {
-        w_mul_outputs(index) := inverted
-      }.otherwise {
-        w_mul_outputs(index) := 0.U.asTypeOf(stage.in)
-      }
+      w_mul_outputs(index) := Mux(stageActive(index), inverted, zeroAs(stage.in))
       w_stage_out := ShiftRegister(w_mul_outputs(index), complexMulLatency, true.B)
     } else if (index == 0) {                               // first stage: pass through
       w_mul_outputs(index) := prev_out
@@ -361,14 +342,9 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
       val fbData = if (evenNoOfStages) w_stage_outputs(index - 2) else w_stage_outputs(index)
       val fbTw   = if (evenNoOfStages) w_twiddles(index - 1)      else w_twiddles(index + 1)
       val mulIn = Wire(stage.in.cloneType)
-      mulIn := Mux(activeOdd, prev_out.asTypeOf(stage.in),
-        Mux(active, fbData, 0.U.asTypeOf(stage.in))
-      ).asTypeOf(stage.in)
-      val mulTw = Mux(activeOdd, w_twiddles(index),
-        Mux(active, fbTw, 0.U.asTypeOf(params.twiddleType))
-      ).asTypeOf(params.twiddleType)
-      w_mul_outputs(index) := Utils.complexMul(
-        mulIn, mulTw, bpos, params.numAddPipes, params.numMulPipes, params.trimType, params.use4Muls)
+      mulIn := activeMux(index, prev_out.asTypeOf(stage.in), fbData, stage.in)
+      val mulTw = activeMux(index, w_twiddles(index), fbTw, params.twiddleType)
+      mul(index, mulIn, mulTw, bpos)
       w_stage_out := bypassOrInverted(index, w_mul_outputs(index), inverted)
     } else {                                               // even stage: forward multiplier result
       w_mul_outputs(index) := (if (evenNoOfStages) w_mul_outputs(index + 1) else w_mul_outputs(index - 1))
