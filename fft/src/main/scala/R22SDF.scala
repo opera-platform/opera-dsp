@@ -37,8 +37,10 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   // Delay buffer connections and control
   w_delay_in        := Mux(w_delay_mux_ctrl, io.in, w_butterfly_scaled(1))
   w_delay_out       := DelayBuffer(w_delay_in, delay, r_en_delayed, params.singlePortMem, params.bufferAsMem)
-  w_delay_mux_ctrl  := ShiftRegister(r_counter < delay, shift_delay, false.B, true.B)
-  w_output_mux_ctrl := ShiftRegister(r_counter < delay.U, params.addPipeRegs + shift_delay, false.B, true.B)
+  // delay = stageSize/2, so r_counter < delay iff MSB of r_counter is 0
+  private val w_first_half  = !r_counter(log2Ceil(params.stageSize) - 1)
+  w_delay_mux_ctrl  := ShiftRegister(w_first_half, shift_delay, false.B, true.B)
+  w_output_mux_ctrl := ShiftRegister(w_first_half, params.addPipeRegs + shift_delay, false.B, true.B)
   io.out := Mux(
     w_output_mux_ctrl,
     ShiftRegister(w_delay_out, params.addPipeRegs, true.B),
@@ -60,14 +62,12 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
     )
     // Check for underflow/overflow
     params.dataType.real match {
-      case fp: FixedPoint =>
-        w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map(data => {
-          val overflow =
-            !data.isSignNegative && (BinaryRepresentation[T].shr(data, data.getWidth - 2) === Real[T].fromDouble(1 / math.pow(2, fp.binaryPoint.get)))
-          val underflow =
-            data.isSignNegative && (BinaryRepresentation[T].shr(data, data.getWidth - 2) === Real[T].fromDouble(0.0))
-          overflow || underflow
-        }).foldLeft(false.B)(_ || _)
+      case _: FixedPoint =>
+        // 2's complement overflow: top 2 bits differ (01 = pos overflow, 10 = neg underflow)
+        w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map { data =>
+          val u = data.asUInt
+          u(data.getWidth - 1) ^ u(data.getWidth - 2)
+        }.foldLeft(false.B)(_ || _)
       case _ =>
         w_overflow := false.B
     }
