@@ -16,12 +16,13 @@ class BitReverseSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   val sampleSize  = 8
   val verbose     = true
-  val random      = false
+  val random      = true
 
   val params = BitReverseParams.fixedPoint(
     dataType = DspComplex(FixedPoint(16.W, 14.BP)),
     memDepth = sampleSize,
-    runTime = false
+    runTime = false,
+    singlePortMem = true
   )
 
   it should "pass when: \n" +
