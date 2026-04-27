@@ -20,13 +20,14 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   val io: RadixIO[T] = IO(new RadixIO(params))
 
   // Wires
-  private val w_delay_mux_ctrl   = Wire(Bool())
-  private val w_delay_in         = Wire(params.dataType)
-  private val w_delay_out        = Wire(params.dataType)
-  private val w_butterfly        = Butterfly[T](Seq(w_delay_out, io.in))
-  private val w_butterfly_scaled = Seq.fill(2)(Wire(params.dataType))
-  private val w_output_mux_ctrl  = Wire(Bool())
-  private val w_overflow         = Wire(Bool())
+  private val w_delay_mux_ctrl     = Wire(Bool())
+  private val w_delay_in           = Wire(params.dataType)
+  private val w_delay_out          = Wire(params.dataType)
+  private val w_butterfly          = Butterfly[T](Seq(w_delay_out, io.in))
+  private val w_butterfly_scaled   = Seq.fill(2)(Wire(params.dataType))
+  private val w_output_mux_ctrl    = Wire(Bool())
+  private val w_output_before_pipe = Wire(params.dataType)
+  private val w_overflow           = Wire(Bool())
 
   // Registers
   private val r_counter = RegInit(counterInit.U(log2Ceil(params.stageSize).W))
@@ -45,12 +46,9 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
 
   private val inFirstHalf = !r_counter(log2Ceil(params.stageSize) - 1)
   w_delay_mux_ctrl  := ShiftRegister(inFirstHalf, controlLatency, false.B, true.B)
-  w_output_mux_ctrl := ShiftRegister(inFirstHalf, params.addPipeRegs + controlLatency, false.B, true.B)
-  io.out := Mux(
-    w_output_mux_ctrl,
-    ShiftRegister(w_delay_out, params.addPipeRegs, true.B),
-    ShiftRegister(w_butterfly_scaled.head, params.addPipeRegs, true.B)
-  )
+  w_output_mux_ctrl := ShiftRegister(inFirstHalf, controlLatency, false.B, true.B)
+  w_output_before_pipe := Mux(w_output_mux_ctrl, w_delay_out, w_butterfly_scaled.head)
+  io.out := ShiftRegister(w_output_before_pipe, params.addPipeRegs, true.B)
 
   // Scaling/growth logic
   if (params.growEnable) {
