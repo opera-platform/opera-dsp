@@ -9,15 +9,16 @@ import fixedpoint._
 class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   val params: RadixParams[T],
 ) extends Module {
-  // Info:
-  print(f"decimation: ${params.decimation}, stage size: ${params.stageSize}, log ${log2Ceil(params.stageSize)}\n")
-  // Variables
-  private val latency     = params.latency
-  private val delay       = params.delay
-  private val cnt_init    = if (params.decimation == DIF) 0 else (params.stageSize / 2 + 1) & (params.stageSize - 1)
-  private val shift_delay = if (params.decimation == DIF) 0 else latency
+  require(params.delay == params.stageSize / 2, s"R22SDF expects delay = stageSize / 2, got delay=${params.delay}, stageSize=${params.stageSize}")
+
+  private val latency        = params.latency
+  private val delay          = params.delay
+  private val counterInit    = if (params.decimation == DIF) 0 else (params.stageSize / 2 + 1) & (params.stageSize - 1)
+  private val controlLatency = if (params.decimation == DIF) 0 else latency
+
   // IOs
   val io: RadixIO[T] = IO(new RadixIO(params))
+
   // Wires
   private val w_delay_mux_ctrl   = Wire(Bool())
   private val w_delay_in         = Wire(params.dataType)
@@ -26,26 +27,31 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   private val w_butterfly_scaled = Seq.fill(2)(Wire(params.dataType))
   private val w_output_mux_ctrl  = Wire(Bool())
   private val w_overflow         = Wire(Bool())
+
   // Registers
-  private val r_counter = RegInit(cnt_init.U(log2Ceil(params.stageSize).W))
-  private val r_en_delayed = ShiftRegister(io.i_en, shift_delay, true.B)
+  private val r_counter = RegInit(counterInit.U(log2Ceil(params.stageSize).W))
+  private val r_delay_enable = ShiftRegister(io.i_en, controlLatency, true.B)
+
   // Counter
   r_counter := r_counter + io.i_en
   io.o_counter := r_counter
+
   // Enable for next stage
   io.o_en := ShiftRegisterWithReset(io.i_en, latency + params.addPipeRegs, false.B, reset.asBool, true.B)
+
   // Delay buffer connections and control
   w_delay_in        := Mux(w_delay_mux_ctrl, io.in, w_butterfly_scaled(1))
-  w_delay_out       := DelayBuffer(w_delay_in, delay, r_en_delayed, params.singlePortMem, params.bufferAsMem)
-  // delay = stageSize/2, so r_counter < delay iff MSB of r_counter is 0
-  private val w_first_half  = !r_counter(log2Ceil(params.stageSize) - 1)
-  w_delay_mux_ctrl  := ShiftRegister(w_first_half, shift_delay, false.B, true.B)
-  w_output_mux_ctrl := ShiftRegister(w_first_half, params.addPipeRegs + shift_delay, false.B, true.B)
+  w_delay_out       := DelayBuffer(w_delay_in, delay, r_delay_enable, params.singlePortMem, params.bufferAsMem)
+
+  private val inFirstHalf = !r_counter(log2Ceil(params.stageSize) - 1)
+  w_delay_mux_ctrl  := ShiftRegister(inFirstHalf, controlLatency, false.B, true.B)
+  w_output_mux_ctrl := ShiftRegister(inFirstHalf, params.addPipeRegs + controlLatency, false.B, true.B)
   io.out := Mux(
     w_output_mux_ctrl,
     ShiftRegister(w_delay_out, params.addPipeRegs, true.B),
     ShiftRegister(w_butterfly_scaled.head, params.addPipeRegs, true.B)
   )
+
   // Scaling/growth logic
   if (params.growEnable) {
     w_butterfly_scaled.head := w_butterfly.head
@@ -60,10 +66,9 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
         w_butterfly.last.div2(1)
       }
     )
-    // Check for underflow/overflow
+
     params.dataType.real match {
       case _: FixedPoint =>
-        // 2's complement overflow: top 2 bits differ (01 = pos overflow, 10 = neg underflow)
         w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map { data =>
           val u = data.asUInt
           u(data.getWidth - 1) ^ u(data.getWidth - 2)
@@ -71,7 +76,7 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
       case _ =>
         w_overflow := false.B
     }
-    // Scale butterfly or don't
+
     w_butterfly_scaled.head := Mux(
       io.i_divBy2.getOrElse(params.divBy2.B),
       butterfly_div_2.head,
@@ -83,6 +88,7 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
       w_butterfly.last.asTypeOf(params.dataType)
     )
   }
+
   // Overflow register
   if (params.overflowReg) {
     io.o_overflow.get := w_overflow
