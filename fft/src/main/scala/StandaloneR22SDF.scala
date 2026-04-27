@@ -28,6 +28,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   private val complexMulLatency = if (params.use4Muls) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
   private val outputLatency     = params.numAddPipes + complexMulLatency
   private val latency           = outputLatency * noOfStages
+  private val outputQueueReserve = latency + 1
 
   // Registers
   private val r_num_stages      = if (params.runTime) Some(RegInit(noOfStages.U(stageCountWidth.W))) else None
@@ -274,47 +275,30 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
       }
   }
 
-  val finalStageIndex = if (params.runTime && !isItDIF)
-    (activeStageCount - 1.U).asTypeOf(UInt(log2Ceil(noOfStages).W))
-  else
-    (noOfStages - 1).U(log2Ceil(noOfStages).W)
-
-  val stageTail = if (isItDIF) {
-    ShiftRegister(w_stage_outputs.last, complexMulLatency, true.B)
-  } else {
-    w_stage_outputs(finalStageIndex)
-  }
+  val finalStageIndex = (if (params.runTime && !isItDIF) activeStageCount - 1.U else (noOfStages - 1).U).asTypeOf(UInt(log2Ceil(noOfStages).W))
+  val stageTail = if (isItDIF) ShiftRegister(w_stage_outputs.last, complexMulLatency, true.B) else w_stage_outputs(finalStageIndex)
 
   val lastStageValid = VecInit(sdf_stages.map(_.io.o_en))(finalStageIndex)
-  // o_last is generated only from the number of accepted output samples.
-  // It stays asserted with the final sample while the output is backpressured.
   val outputLast = outputSampleCount === (activeFftSize - 1.U)
   val outputValid = lastStageValid && !cfgLoad
-  val outputBits = Wire(chiselTypeOf(stageTail))
 
-  if (latency == 0) {
-    io.out.valid := outputValid
-    outputBits := stageTail
-    io.in.ready := !cfgLoad && ~lastStageValid
-  } else {
-    val outQueue = withReset(cfgReset) {
-      Module(new Queue(chiselTypeOf(stageTail), entries = latency + 1, pipe = true, flow = true))
-    }
-    outQueue.io.enq.bits := stageTail
-    outQueue.io.enq.valid := outputValid
-    outQueue.io.deq.ready := io.out.ready && !cfgLoad
-
-    io.in.ready  := !cfgLoad && outQueue.io.enq.ready
-    io.out.valid := outQueue.io.deq.valid && !cfgLoad
-    outputBits := outQueue.io.deq.bits
+  val outQueue = withReset(cfgReset) {
+    Module(new Queue(UInt((stageTail.getWidth + 1).W), entries = 2 * outputQueueReserve, pipe = true, flow = true))
   }
+  outQueue.io.enq.bits  := Cat(outputLast, stageTail.asUInt)
+  outQueue.io.enq.valid := outputValid
+  outQueue.io.deq.ready := io.out.ready && !cfgLoad
 
-  Utils.assignFftOutputByDirection(outputBits, w_output, fftOrIfft)
-  io.o_last := io.out.valid && outputLast
+  val outQueueHasReserve = outQueue.io.count < outputQueueReserve.U
+  io.in.ready  := !cfgLoad && outQueue.io.enq.ready && outQueueHasReserve
+  io.out.valid := outQueue.io.deq.valid && !cfgLoad
+
+  Utils.assignFftOutputByDirection(outQueue.io.deq.bits(stageTail.getWidth - 1, 0).asTypeOf(stageTail), w_output, fftOrIfft)
+  io.o_last := io.out.valid && outQueue.io.deq.bits(stageTail.getWidth)
 
   when(cfgLoad) {
     outputSampleCount := 0.U
-  }.elsewhen(io.out.fire) {
+  }.elsewhen(outQueue.io.enq.fire) {
     outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
   }
 
