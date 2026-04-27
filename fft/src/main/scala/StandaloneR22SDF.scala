@@ -33,15 +33,12 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   // Registers
   private val r_num_stages      = if (params.runTime) Some(RegInit(noOfStages.U(stageCountWidth.W))) else None
   private val r_fft_or_ifft     = if (params.directionReg) Some(RegInit(params.direction.B)) else None
+  private val r_divBy2          = if (params.divBy2Reg) Some(RegInit(VecInit(params.divBy2.toIndexedSeq.map(_.B)))) else None
   private val r_counters_msb    = RegInit(VecInit(Seq.fill(noOfStages)(false.B)))
-  private val inputSampleCount  = RegInit(0.U(log2Ceil(params.fftSize).W))
-  private val acceptedFrameCount = RegInit(0.U(1.W))
   private val outputSampleCount = RegInit(0.U(log2Ceil(params.fftSize).W))
 
   // Wires
   private val w_output           = Wire(params.outDataType)
-  private val w_stage_en         = Wire(Vec(noOfStages, Bool()))
-  private val w_i_en_last_stage  = Wire(Bool())
   private val w_last_stage_valid = Wire(Bool())
   private val w_fft_size         = Wire(UInt(log2Ceil(params.fftSize + 1).W))
   private val w_stage_outputs    = Wire(Vec(noOfStages, params.outDataType))
@@ -61,30 +58,20 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   private val LUT               = QuarterWaveSineLUT[T](1 << noOfStages, params.twiddleType)
 
   // Runtime-derived signals
+  private val cfgLoad          = io.i_load_cfg.getOrElse(false.B)
+  private val cfgReset         = reset.asBool || cfgLoad
   private val activeStageCount = r_num_stages.getOrElse(noOfStages.U(stageCountWidth.W))
   private val isShiftedAddress = if (params.runTime) activeStageCount(0) ^ (noOfStages & 1).B else false.B
   private val fftOrIfft        = r_fft_or_ifft.getOrElse(params.direction.B)
 
   w_fft_size := (if (params.runTime) 1.U << activeStageCount else params.fftSize.U)
 
-  val inputFrameStart = io.in.fire && inputSampleCount === 0.U
-  val inputFrameEnd   = io.in.fire && inputSampleCount === (w_fft_size - 1.U)
-  val sdfWarm         = acceptedFrameCount =/= 0.U
-
-  when(inputFrameStart) {
+  when(cfgLoad) {
     if (params.runTime)      r_num_stages.get  := io.i_size.get
     if (params.directionReg) r_fft_or_ifft.get := io.i_fft_or_ifft.get
+    if (params.divBy2Reg)    r_divBy2.get      := io.i_divBy2.get
+    r_counters_msb := VecInit(Seq.fill(noOfStages)(false.B))
   }
-
-  when(inputFrameEnd) {
-    inputSampleCount := 0.U
-    acceptedFrameCount := 1.U
-  }.elsewhen(io.in.fire) {
-    inputSampleCount := inputSampleCount + 1.U
-  }
-
-  w_i_en_last_stage := (if (params.runTime && !isItDIF)
-    w_stage_en((activeStageCount - 1.U).asTypeOf(UInt(log2Ceil(noOfStages).W))) else w_stage_en(noOfStages - 1))
 
   // Stage-activity computation
   if (params.runTime) {
@@ -109,7 +96,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   val sdf_stages: Seq[R22SDF[T]] = stageDelays.zipWithIndex.map {
     case (delay, i) =>
       val stageParams = params.copy(inDataType = params.protoIQstages(i))
-      val stage = Module(new R22SDF(RadixParams(
+      val stage = withReset(cfgReset) { Module(new R22SDF(RadixParams(
         dataType      = stageParams.inDataType,
         twiddleType   = stageParams.twiddleType,
         stageSize     = if (isItDIF) params.fftSize >> i else 2 << i,
@@ -126,12 +113,10 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
         bufferAsMem   = params.minSRAMdepth < delay,
         singlePortMem = params.singlePortSRAM,
         trimType      = stageParams.trimType,
-      )))
+      ))) }
 
-      if (params.divBy2Reg)   stage.io.i_divBy2.get  := io.i_divBy2.get(i)
+      if (params.divBy2Reg)   stage.io.i_divBy2.get  := r_divBy2.get(i)
       if (params.overflowReg) io.o_overflow.get(i)   := stage.io.o_overflow.get
-
-      w_stage_en(i) := stage.io.i_en
 
       // Twiddle address generation and inversion-signal logic
       wireStageTwiddleControl(stage, i, delay)
@@ -160,36 +145,39 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   else
     w_stage_tail := w_stage_outputs.last
 
-  w_last_stage_valid := ShiftRegisterWithReset(
-    sdfWarm && w_i_en_last_stage, outputLatency,
-    resetData = false.B, reset = reset.asBool, en = true.B)
+  val w_stage_o_en = VecInit(sdf_stages.map(_.io.o_en))
+  w_last_stage_valid := (if (params.runTime && !isItDIF)
+    w_stage_o_en((activeStageCount - 1.U).asTypeOf(UInt(log2Ceil(noOfStages).W))) else w_stage_o_en(noOfStages - 1))
 
-  io.in.ready := ~w_last_stage_valid
+  io.in.ready := !cfgLoad && ~w_last_stage_valid
   private val shift_output = noOfStages.U * (params.expandLogic.sum != 0 || params.divBy2Reg).B
   // o_last is generated only from the number of accepted output samples.
   // It stays asserted with the final sample while the output is backpressured.
   val outputLast = outputSampleCount === (w_fft_size - 1.U)
+  val outputValid = w_last_stage_valid && !cfgLoad
 
   if (latency == 0) {
-    io.out.valid := w_last_stage_valid
+    io.out.valid := outputValid
     Utils.assignFftOutputByDirection(w_stage_tail, w_output, fftOrIfft)
-    when(io.out.fire) {
-      outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
-    }
     io.o_last := io.out.valid && outputLast
   } else {
-    val outQueue = Module(new Queue(chiselTypeOf(w_stage_tail), entries = latency + 1, pipe = true, flow = true))
-    outQueue.io.enq.bits := w_stage_tail
-    outQueue.io.enq.valid := w_last_stage_valid
-    outQueue.io.deq.ready := io.out.ready
-
-    io.in.ready  := !sdfWarm || outQueue.io.enq.ready
-    io.out.valid := outQueue.io.deq.valid
-    Utils.assignFftOutputByDirection(outQueue.io.deq.bits, w_output, fftOrIfft)
-    when(io.out.fire) {
-      outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
+    val outQueue = withReset(cfgReset) {
+      Module(new Queue(chiselTypeOf(w_stage_tail), entries = latency + 1, pipe = true, flow = true))
     }
+    outQueue.io.enq.bits := w_stage_tail
+    outQueue.io.enq.valid := outputValid
+    outQueue.io.deq.ready := io.out.ready && !cfgLoad
+
+    io.in.ready  := !cfgLoad && outQueue.io.enq.ready
+    io.out.valid := outQueue.io.deq.valid && !cfgLoad
+    Utils.assignFftOutputByDirection(outQueue.io.deq.bits, w_output, fftOrIfft)
     io.o_last := io.out.valid && outputLast
+  }
+
+  when(cfgLoad) {
+    outputSampleCount := 0.U
+  }.elsewhen(io.out.fire) {
+    outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
   }
 
   io.out.bits.real := w_output.real >> shift_output
@@ -240,7 +228,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
   private def wireNonTrivialTwiddle(stage: R22SDF[T], i: Int): Unit = {
     val counterWrap = stage.io.o_counter === ((1 << stage.io.o_counter.getWidth) - 1).U
     w_invert_signals(i) := false.B
-    when(stage.io.i_en && counterWrap) {
+    when(!cfgLoad && stage.io.i_en && counterWrap) {
       r_counters_msb(i) := ~r_counters_msb(i)
     }
     if (isItDIF) {
@@ -278,7 +266,8 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
           (i.U >> 1.U).asTypeOf(UInt(twIdx.W)))
         w_lookup_twiddles(idx)
       } else {
-        w_lookup_twiddles(staticTwiddleLookupIndices(i))
+        val idx = staticTwiddleLookupIndices(i)
+        if (idx >= 0 && idx < noOfTwiddles) w_lookup_twiddles(idx) else 0.U.asTypeOf(params.twiddleType)
       }
     } else {
       0.U.asTypeOf(params.twiddleType)
