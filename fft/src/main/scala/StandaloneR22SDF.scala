@@ -6,6 +6,7 @@ import dsptools._
 import dsptools.numbers._
 
 // TODO: For output scaling maybe do div2 instead of truncation. More logic but more accurate
+// TODO: Refactor the names of signals. Use either name_second_name or nameSecondName consistently, and make sure the names are descriptive enough to understand their purpose without needing comments.
 class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) extends Module with HasIO[T] {
   val io: FFTIO[T] = IO(new FFTIO(params))
 
@@ -128,7 +129,7 @@ class StandaloneR22SDF[T <: Data: Real: BinaryRepresentation](val params: FFTPar
     case (m, i) =>
       val stageN = 1 << (noOfStages - m)
       w_lookup_twiddles(if (isItDIF) i else noOfTwiddles - 1 - i) :=
-        TwiddleFromLUT[T](w_lookup_address(if (isItDIF) i else noOfTwiddles - 1 - i)(log2Ceil(stageN) - 1, 0), stageN, 1 << noOfStages, LUT)
+        Radix22TwiddleFromLUT[T](w_lookup_address(if (isItDIF) i else noOfTwiddles - 1 - i)(log2Ceil(stageN) - 1, 0), stageN, 1 << noOfStages, LUT)
   }
 
   // Stage instantiation and twiddle address generation
