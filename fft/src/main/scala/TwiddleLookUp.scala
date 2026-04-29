@@ -20,15 +20,52 @@ object QuarterWaveSineLUT {
   }
 }
 
-/** Twiddle factors from Quarter-wave sine LUT */
-object TwiddleFromLUT {
-  def apply[T <: Data : Real](address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+private[fft] object QuarterWaveTwiddle {
+  def requireValidConfig(stageN: Int, FFT_size: Int): Unit = {
     require(stageN >= 4           ,  "stage must be at least 4")
     require(stageN % 4 == 0       ,  "stage must be divisible by 4")
     require(FFT_size % stageN == 0, s"FFT size ($FFT_size) must be a multiple of stageN ($stageN)")
     require(FFT_size % 4 == 0     ,  "FFT size must be divisible by 4")
+  }
+
+  def fromLogicalIndex[T <: Data : Real](k: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+    requireValidConfig(stageN, FFT_size)
 
     val stride   = FFT_size / stageN
+    val nDiv4    = stageN / 4
+    val idWidth  = log2Ceil(stageN)
+    val lowWidth = log2Ceil(nDiv4)
+
+    val logicalIndex = k(idWidth - 1, 0)
+    val nDiv4U = nDiv4.U(idWidth.W)
+    val q = if (lowWidth == 0) logicalIndex(idWidth - 1, 0) else logicalIndex(idWidth - 1, lowWidth)
+    val m = if (lowWidth == 0) 0.U(idWidth.W) else logicalIndex(lowWidth - 1, 0).asTypeOf(UInt(idWidth.W))
+    val mirror = Mux(q(0), nDiv4U - m, m).asTypeOf(UInt(idWidth.W))
+    val sineID = mirror(log2Ceil(nDiv4 + 1) - 1, 0)
+
+    val twiddleIDWidth = log2Ceil(FFT_size / 2)
+    val scaledSineID = if (isPowerOfTwo(stride)) sineID << log2Ceil(stride) else sineID * stride.U
+    val twiddleID = scaledSineID(twiddleIDWidth - 1, 0)
+
+    val sinA = LUT(twiddleID)
+    val cosA = LUT((FFT_size / 4).U - twiddleID)
+    val cosNeg = q(1) ^ q(0)
+    val sinNeg = q(1)
+    val cosTheta = Mux(cosNeg, -cosA, cosA)
+    val sinTheta = Mux(sinNeg, -sinA, sinA)
+
+    DspComplex.wire(real = cosTheta, imag = -sinTheta)
+  }
+
+  private def isPowerOfTwo(value: Int): Boolean =
+    value > 0 && (value & (value - 1)) == 0
+}
+
+/** Radix-2^2 twiddle factors from the shared quarter-wave sine LUT. */
+object Radix22TwiddleFromLUT {
+  def apply[T <: Data : Real](address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+    QuarterWaveTwiddle.requireValidConfig(stageN, FFT_size)
+
     val nDiv4    = stageN / 4
     val idWidth  = log2Ceil(stageN)
     val lowWidth = log2Ceil(nDiv4)
@@ -45,23 +82,13 @@ object TwiddleFromLUT {
       3.U -> (a + (a << 1)).asTypeOf(UInt(idWidth.W))
     ))
 
-    // find quadrant + base angle index
-    val nDiv4U = nDiv4.U(idWidth.W)
-    val q = if (lowWidth == 0) k(idWidth - 1, 0) else k(idWidth - 1, lowWidth) // quadrant: 0..3
-    val m = if (lowWidth == 0) 0.U(idWidth.W) else k(lowWidth - 1, 0).asTypeOf(UInt(idWidth.W))
-    // Mirror within quadrant
-    val mirror = Mux(q(0), nDiv4U - m, m).asTypeOf(UInt(idWidth.W)) // if odd quadrant, mirror
-    val sineID = mirror(log2Ceil(nDiv4 + 1) - 1, 0)
-    // Map quarter-wave index to LUT index
-    val twiddleID = (sineID * stride.U)(log2Ceil(FFT_size/2)-1,0)
-    val sinA = LUT(twiddleID)             // sin(a)
-    val cosA = LUT((FFT_size / 4).U - twiddleID) // cos(a) = sin(π/2 - a)
-    // find quadrant-based signs
-    val cosNeg = q(1) ^ q(0)
-    val sinNeg = q(1)
-    val cosTheta = Mux(cosNeg, -cosA, cosA)
-    val sinTheta = Mux(sinNeg, -sinA, sinA)
-    // Return: W_stageN^k = cos(θ) - j sin(θ)
-    DspComplex.wire(real = cosTheta, imag = -sinTheta)
+    QuarterWaveTwiddle.fromLogicalIndex(k, stageN, FFT_size, LUT)
+  }
+}
+
+/** Direct radix-2 twiddle factor from the shared quarter-wave sine LUT. */
+object Radix2TwiddleFromLUT {
+  def apply[T <: Data : Real](address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+    QuarterWaveTwiddle.fromLogicalIndex(address, stageN, FFT_size, LUT)
   }
 }
