@@ -75,15 +75,23 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
         w_overflow := false.B
     }
 
+    val butterfly_pass = Seq.fill(2)(Wire(params.dataType))
+    butterfly_pass.head := w_butterfly.head
+    butterfly_pass.last := w_butterfly.last
+
+    val butterfly_div_2_scaled = Seq.fill(2)(Wire(params.dataType))
+    butterfly_div_2_scaled.head := butterfly_div_2.head
+    butterfly_div_2_scaled.last := butterfly_div_2.last
+
     w_butterfly_scaled.head := Mux(
       io.i_divBy2.getOrElse(params.divBy2.B),
-      butterfly_div_2.head,
-      w_butterfly.head.asTypeOf(params.dataType)
+      butterfly_div_2_scaled.head,
+      butterfly_pass.head
     )
     w_butterfly_scaled.last := Mux(
       io.i_divBy2.getOrElse(params.divBy2.B),
-      butterfly_div_2.last,
-      w_butterfly.last.asTypeOf(params.dataType)
+      butterfly_div_2_scaled.last,
+      butterfly_pass.last
     )
   }
 
