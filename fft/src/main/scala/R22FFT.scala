@@ -21,6 +21,16 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
   private val staticStageOdd = stageRoleIndices.map(i => (i & 1) == 1)
   private val stageHasTwiddleControl = (0 until noOfStages).map(i => if (isItDIF) i != noOfStages - 1 else i != 0)
 
+  if (params.runTime) {
+    (1 until noOfStages by 2).filter(_ + 1 < noOfStages).foreach { i =>
+      require(
+        params.resolvedTwiddleTrimTypes(i) == params.resolvedTwiddleTrimTypes(i + 1),
+        s"R22FFT runtime mode shares a twiddle multiplier between stages $i and ${i + 1}; " +
+          s"twiddleTrimTypes must match, got ${params.resolvedTwiddleTrimTypes(i)} and ${params.resolvedTwiddleTrimTypes(i + 1)}"
+      )
+    }
+  }
+
   // Latencies
   private val complexMulLatency = if (params.use4Muls) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
   private val latency           = (params.numAddPipes + complexMulLatency) * noOfStages
@@ -152,7 +162,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
         delay         = delay,
         bufferAsMem   = params.minSRAMdepth < delay,
         singlePortMem = params.singlePortSRAM,
-        trimType      = stageParams.trimType,
+        trimType      = params.resolvedStageTrimTypes(i),
       ))) }
 
       if (params.divBy2Reg)   stage.io.i_divBy2.get  := r_divBy2.get(i)
@@ -198,7 +208,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
             Mux(stageActiveOdd(index), stage.out, Mux(stageActive(index), w_stage_outputs(index + 1), 0.U.asTypeOf(stage.in))).asTypeOf(stage.in),
             Mux(stageActiveOdd(index), w_twiddles(index), Mux(stageActive(index), w_twiddles(index + 1), 0.U.asTypeOf(params.twiddleType))).asTypeOf(params.twiddleType),
             params.protoIQstages(index),
-            params.numAddPipes, params.numMulPipes, params.trimType, params.use4Muls)
+            params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
           out := bypassOrInverted(index, w_mul_outputs(index), inverted)
         } else {
           w_mul_outputs(index) := w_mul_outputs(index - 1).asTypeOf(w_mul_outputs(index))
@@ -221,7 +231,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
             Mux(stageActiveOdd(index), prev_out.asTypeOf(stage.in), Mux(stageActive(index), fbData, 0.U.asTypeOf(stage.in))).asTypeOf(stage.in),
             Mux(stageActiveOdd(index), w_twiddles(index), Mux(stageActive(index), fbTw, 0.U.asTypeOf(params.twiddleType))).asTypeOf(params.twiddleType),
             params.protoIQstages(index),
-            params.numAddPipes, params.numMulPipes, params.trimType, params.use4Muls)
+            params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
           w_stage_out := bypassOrInverted(index, w_mul_outputs(index), inverted)
         } else {
           w_mul_outputs(index) := (if (evenNoOfStages) w_mul_outputs(index + 1) else w_mul_outputs(index - 1))

@@ -79,7 +79,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
       params.protoIQstages(index),
       params.numAddPipes,
       params.numMulPipes,
-      params.trimType,
+      params.resolvedTwiddleTrimTypes(index),
       params.use4Muls
     )
     pass := delayedBypass(data)
@@ -112,7 +112,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
         delay         = delay,
         bufferAsMem   = params.minSRAMdepth < delay,
         singlePortMem = params.singlePortSRAM,
-        trimType      = stageParams.trimType,
+        trimType      = params.resolvedStageTrimTypes(i),
       ))) }
 
       if (params.divBy2Reg)   stage.io.i_divBy2.get := r_divBy2.get(i)
@@ -157,7 +157,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
           params.protoIQstages(index),
           params.numAddPipes,
           params.numMulPipes,
-          params.trimType,
+          params.resolvedTwiddleTrimTypes(index),
           params.use4Muls
         )
         w_chain_outputs(index) := Mux(
