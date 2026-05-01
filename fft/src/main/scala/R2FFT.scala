@@ -49,10 +49,26 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
   private val activeFftSize    = if (params.runTime) 1.U << activeStageCount else params.fftSize.U
   private val fftOrIfft        = r_fft_or_ifft.getOrElse(params.direction.B)
   private val outputShift      = if (params.expandLogic.sum != 0 || params.divBy2Reg) noOfStages.U else 0.U
+  private val runtimeDifInputs = if (params.runTime && isItDIF) {
+    val delayed = Wire(Vec(noOfStages, params.inDataType))
+    delayed(0) := io.in.bits
+    for (i <- 1 until noOfStages) {
+      delayed(i) := ShiftRegister(delayed(i - 1), stageLatency, true.B)
+    }
+    Some(delayed)
+  } else {
+    None
+  }
 
   // Stage helpers
   private def stageActive(i: Int): Bool = if (params.runTime) firstActiveStage <= stageRoleIndices(i).U else true.B
   private def stageHasActiveTwiddle(i: Int): Bool = if (params.runTime) stageActive(i) && stageHasTwiddle(i).B else stageHasTwiddle(i).B
+  private def stageTakesRuntimeInput(i: Int): Bool =
+    if (params.runTime) {
+      if (isItDIF) i.U === firstActiveStage else (i == 0).B
+    } else {
+      (i == 0).B
+    }
 
   // Twiddle helpers
   private def zeroTwiddle: DspComplex[T] = 0.U.asTypeOf(params.twiddleType)
@@ -140,7 +156,10 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
   sdf_stages.map(_.io).zipWithIndex.foldLeft(firstStageInput) {
     case (prevOut, (stage, index)) =>
       val activeInput = if (params.runTime) {
-        val selectedInput = Mux(index.U === firstActiveStage, io.in.bits.asTypeOf(stage.in), prevOut.asTypeOf(stage.in))
+        val runtimeInput =
+          if (isItDIF) runtimeDifInputs.get.apply(index).asTypeOf(stage.in)
+          else io.in.bits.asTypeOf(stage.in)
+        val selectedInput = Mux(stageTakesRuntimeInput(index), runtimeInput, prevOut.asTypeOf(stage.in))
         Mux(stageActive(index), selectedInput, 0.U.asTypeOf(stage.in)).asTypeOf(stage.in)
       } else if (index == 0) {
         io.in.bits

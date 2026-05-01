@@ -33,7 +33,8 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
 
   // Latencies
   private val complexMulLatency = if (params.use4Muls) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
-  private val latency           = (params.numAddPipes + complexMulLatency) * noOfStages
+  private val stageLatency      = params.numAddPipes + complexMulLatency
+  private val latency           = stageLatency * noOfStages
   private val outputQueueReserve = latency + 1
 
   // Registers
@@ -65,6 +66,16 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
   private val isShiftedAddress = if (params.runTime) activeStageCount(0) ^ (noOfStages & 1).B else false.B
   private val fftOrIfft        = r_fft_or_ifft.getOrElse(params.direction.B)
   private val outputShift      = if (params.expandLogic.sum != 0 || params.divBy2Reg) noOfStages.U else 0.U
+  private val runtimeDifInputs = if (params.runTime && isItDIF) {
+    val delayed = Wire(Vec(noOfStages, params.inDataType))
+    delayed(0) := io.in.bits
+    for (i <- 1 until noOfStages) {
+      delayed(i) := ShiftRegister(delayed(i - 1), stageLatency, true.B)
+    }
+    Some(delayed)
+  } else {
+    None
+  }
 
   // Stage helpers
   private def stageOdd(i: Int): Bool       = if (params.runTime) (stageRoleIndices(i).U - firstActiveStage)(0) else staticStageOdd(i).B
@@ -193,7 +204,11 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
       w_stage_outputs(index) := stage.out
       if (isItDIF) {
         stage.in := (if (params.runTime)
-          Mux(stageActive(index), Mux(index.U === firstActiveStage, io.in.bits, prev_out), 0.U.asTypeOf(stage.in)).asTypeOf(stage.in)
+          Mux(
+            stageActive(index),
+            Mux(index.U === firstActiveStage, runtimeDifInputs.get.apply(index).asTypeOf(stage.in), prev_out),
+            0.U.asTypeOf(stage.in)
+          ).asTypeOf(stage.in)
         else if (index == 0) io.in.bits else prev_out)
 
         val inverted = Utils.invertComplexData(stage.out, w_invert_signals(index))
