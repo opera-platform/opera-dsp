@@ -5,10 +5,6 @@ import chisel3.util._
 import dsptools._
 import dsptools.numbers._
 
-sealed trait DecimationType
-case object DIT extends DecimationType
-case object DIF extends DecimationType
-
 case class RadixParams[T <: Data] (
   dataType     : DspComplex[T],
   twiddleType  : DspComplex[T],

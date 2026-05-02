@@ -38,7 +38,7 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   io.o_counter := r_counter
 
   // Enable for next stage
-  io.o_en := ShiftRegisterWithReset(io.i_en, latency + params.addPipeRegs, false.B, reset.asBool, true.B)
+  io.o_en := ShiftRegister(io.i_en, latency + params.addPipeRegs, false.B, true.B)
 
   // Delay buffer connections and control
   w_delay_in        := Mux(w_delay_mux_ctrl, io.in, w_butterfly_scaled(1))

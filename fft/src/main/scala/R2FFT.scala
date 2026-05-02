@@ -34,7 +34,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
   private val w_output        = Wire(params.outDataType)
   private val w_stage_outputs = Wire(Vec(noOfStages, params.outDataType))
   private val w_chain_outputs = Wire(Vec(noOfStages, params.outDataType))
-  private val w_mul_outputs   = Wire(MixedVec((0 until noOfStages).map(i => params.protoIQstages(i))))
+  private val w_mul_outputs   = Wire(MixedVec((0 until noOfStages).map(i => params.stageDataTypes(i))))
   private val w_twiddles      = Wire(Vec(noOfStages, params.twiddleType))
   private val w_twiddle_en    = Wire(Vec(noOfStages, Bool()))
 
@@ -92,7 +92,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
     mul := Utils.complexMul(
       data,
       twiddle,
-      params.protoIQstages(index),
+      params.stageDataTypes(index),
       params.numAddPipes,
       params.numMulPipes,
       params.resolvedTwiddleTrimTypes(index),
@@ -111,7 +111,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
   // Stage instantiation and twiddle control
   val sdf_stages: Seq[R2SDF[T]] = stageDelays.zipWithIndex.map {
     case (delay, i) =>
-      val stageParams = params.copy(inDataType = params.protoIQstages(i))
+      val stageParams = params.copy(inDataType = params.stageDataTypes(i))
       val stage = withReset(cfgReset) { Module(new R2SDF(RadixParams(
         dataType      = stageParams.inDataType,
         twiddleType   = stageParams.twiddleType,
@@ -173,7 +173,7 @@ class R2FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ext
         w_mul_outputs(index) := Utils.complexMul(
           stage.out,
           w_twiddles(index),
-          params.protoIQstages(index),
+          params.stageDataTypes(index),
           params.numAddPipes,
           params.numMulPipes,
           params.resolvedTwiddleTrimTypes(index),

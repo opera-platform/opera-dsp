@@ -12,7 +12,7 @@ class FFTIO[T <: Data: Ring](params: FFTParams[T]) extends Bundle {
   private val hasRuntimeConfig = params.runTime || params.divBy2Reg || params.directionReg
 
   val in : DecoupledIO[DspComplex[T]] = Flipped(Decoupled(params.inDataType))
-  val out: DecoupledIO[DspComplex[T]] = Decoupled(params.protoIQstages(log2Ceil(params.fftSize) - 1))
+  val out: DecoupledIO[DspComplex[T]] = Decoupled(params.stageDataTypes(log2Ceil(params.fftSize) - 1))
   val i_last: Bool = Input(Bool())
   val o_last: Bool = Output(Bool())
   // Control

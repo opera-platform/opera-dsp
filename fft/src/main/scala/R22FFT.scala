@@ -47,7 +47,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
   // Wires
   private val w_output         = Wire(params.outDataType)
   private val w_stage_outputs  = Wire(Vec(noOfStages, params.outDataType))
-  private val w_mul_outputs    = Wire(MixedVec((0 until noOfStages).map(i => params.protoIQstages(i))))
+  private val w_mul_outputs    = Wire(MixedVec((0 until noOfStages).map(i => params.stageDataTypes(i))))
   private val w_invert_signals = Wire(Vec(noOfStages, Bool()))
 
   // Twiddle factor infrastructure
@@ -156,7 +156,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
   // Stage instantiation and twiddle address generation
   val sdf_stages: Seq[R22SDF[T]] = stageDelays.zipWithIndex.map {
     case (delay, i) =>
-      val stageParams = params.copy(inDataType = params.protoIQstages(i))
+      val stageParams = params.copy(inDataType = params.stageDataTypes(i))
       val stage = withReset(cfgReset) { Module(new R22SDF(RadixParams(
         dataType      = stageParams.inDataType,
         twiddleType   = stageParams.twiddleType,
@@ -222,7 +222,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
           w_mul_outputs(index) := Utils.complexMul(
             Mux(stageActiveOdd(index), stage.out, Mux(stageActive(index), w_stage_outputs(index + 1), 0.U.asTypeOf(stage.in))).asTypeOf(stage.in),
             Mux(stageActiveOdd(index), w_twiddles(index), Mux(stageActive(index), w_twiddles(index + 1), 0.U.asTypeOf(params.twiddleType))).asTypeOf(params.twiddleType),
-            params.protoIQstages(index),
+            params.stageDataTypes(index),
             params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
           out := bypassOrInverted(index, w_mul_outputs(index), inverted)
         } else {
@@ -245,7 +245,7 @@ class R22FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) ex
           w_mul_outputs(index) := Utils.complexMul(
             Mux(stageActiveOdd(index), prev_out.asTypeOf(stage.in), Mux(stageActive(index), fbData, 0.U.asTypeOf(stage.in))).asTypeOf(stage.in),
             Mux(stageActiveOdd(index), w_twiddles(index), Mux(stageActive(index), fbTw, 0.U.asTypeOf(params.twiddleType))).asTypeOf(params.twiddleType),
-            params.protoIQstages(index),
+            params.stageDataTypes(index),
             params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
           w_stage_out := bypassOrInverted(index, w_mul_outputs(index), inverted)
         } else {
