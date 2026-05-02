@@ -3,10 +3,11 @@ package opera.fft
 import chisel3._
 import chisel3.util._
 import dsptools.numbers._
+import fixedpoint.FixedPoint
 
-class RadixIO[T <: Data: Ring](params: RadixParams[T]) extends Bundle {
-  val in : DspComplex[T] = Input(params.dataType)
-  val out: DspComplex[T] = Output(params.dataType)
+class RadixIO(params: RadixParams) extends Bundle {
+  val in : DspComplex[FixedPoint] = Input(params.inDataType)
+  val out: DspComplex[FixedPoint] = Output(params.outDataType)
   // Control
   val i_en     : Bool = Input(Bool())
   val o_en     : Bool = Output(Bool())

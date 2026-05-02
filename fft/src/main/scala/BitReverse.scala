@@ -7,11 +7,11 @@ import chisel3.experimental.requireIsChiselType
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util._
 import dspblocks._
-import dsptools.numbers.{BinaryRepresentation, DspComplex, Real}
+import dsptools.numbers.DspComplex
 import fixedpoint.{FixedPoint, fromIntToBinaryPoint}
 
-case class BitReverseParams[T <: Data](
-  dataType     : DspComplex[T],
+case class BitReverseParams(
+  dataType     : DspComplex[FixedPoint],
   memDepth     : Int,
   runTime      : Boolean = false,
   singlePortMem: Boolean = false
@@ -19,33 +19,17 @@ case class BitReverseParams[T <: Data](
   requireIsChiselType(dataType)
 }
 
-object BitReverseParams {
-  def fixedPoint(
-    dataType: DspComplex[FixedPoint] = DspComplex(FixedPoint(16.W, 14.BP)),
-    memDepth:   Int = 16,
-    runTime: Boolean = false,
-    singlePortMem: Boolean = false
-  ): BitReverseParams[FixedPoint] = {
-    BitReverseParams(
-      dataType = dataType,
-      memDepth = memDepth,
-      runTime = runTime,
-      singlePortMem = singlePortMem
-    )
-  }
-}
-
-class BitReverseIO[T <: Data: Real](val params: BitReverseParams[T]) extends Bundle {
-  val in: DecoupledIO[DspComplex[T]] = Flipped(Decoupled(params.dataType))
-  val out: DecoupledIO[DspComplex[T]] = Decoupled(params.dataType)
+class BitReverseIO(val params: BitReverseParams) extends Bundle {
+  val in: DecoupledIO[DspComplex[FixedPoint]] = Flipped(Decoupled(params.dataType))
+  val out: DecoupledIO[DspComplex[FixedPoint]] = Decoupled(params.dataType)
   val i_samples: Option[UInt] = if (params.runTime) Some(Input(UInt(log2Ceil(params.memDepth + 1).W))) else None
 
   val i_last: Bool = Input(Bool())
   val o_last: Bool = Output(Bool())
 }
 
-class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReverseParams[T]) extends Module {
-  val io: BitReverseIO[T] = IO(new BitReverseIO(params))
+class BitReverse(val params: BitReverseParams) extends Module {
+  val io: BitReverseIO = IO(new BitReverseIO(params))
 
   // Double buffer
   val memDepth: Int        = params.memDepth
@@ -156,7 +140,7 @@ class BitReverse[T <: Data: Real: BinaryRepresentation](val params: BitReversePa
 
 object BitReverseApp extends App {
 
-  val params = BitReverseParams.fixedPoint(
+  val params = BitReverseParams(
     dataType = DspComplex(FixedPoint(16.W, 14.BP)),
     memDepth = 8,
     runTime = false

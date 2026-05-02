@@ -34,19 +34,16 @@ object Utils {
   }
 
   /** Pipelined complex multiply with explicit DSP context settings and trim point from the input type. */
-  def complexMul[T <: Data: Real: BinaryRepresentation](
-      input       : DspComplex[T],
-      twiddle     : DspComplex[T],
-      inputType   : DspComplex[T],
+  def complexMul(
+      input       : DspComplex[FixedPoint],
+      twiddle     : DspComplex[FixedPoint],
+      inputType   : DspComplex[FixedPoint],
       numAddPipes : Int,
       numMulPipes : Int,
       trimType    : TrimType,
       use4Muls    : Boolean,
-  ): DspComplex[T] = {
-    val bpos = inputType.real.cloneType match {
-      case fp: FixedPoint => fp.binaryPoint.get
-      case _              => 0
-    }
+  ): DspComplex[FixedPoint] = {
+    val bpos = inputType.real.binaryPoint.get
     DspContext.alter(DspContext.current.copy(
       numAddPipes     = numAddPipes,
       numMulPipes     = numMulPipes,
@@ -57,7 +54,7 @@ object Utils {
   }
 
   /** Conditionally rotate complex data by -j (swap real/imag and negate new imag). */
-  def invertComplexData[T <: Data: Real](data: DspComplex[T], invertSig: Bool): DspComplex[T] = {
+  def invertComplexData(data: DspComplex[FixedPoint], invertSig: Bool): DspComplex[FixedPoint] = {
     val out = Wire(data.cloneType)
     out.real := Mux(invertSig,  data.imag, data.real)
     out.imag := Mux(invertSig, -data.real, data.imag)
@@ -65,7 +62,7 @@ object Utils {
   }
 
   /** Drive dst from src, swapping real/imag when the direction selects IFFT ordering. */
-  def assignFftOutputByDirection[T <: Data](src: DspComplex[T], dst: DspComplex[T], fftOrIfft: Bool): Unit =
+  def assignFftOutputByDirection(src: DspComplex[FixedPoint], dst: DspComplex[FixedPoint], fftOrIfft: Bool): Unit =
     when(fftOrIfft) { dst := src }
     .otherwise      { dst.real := src.imag; dst.imag := src.real }
 }

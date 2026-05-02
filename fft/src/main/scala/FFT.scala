@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util._
 import dsptools.numbers._
+import fixedpoint._
 
 /**
  * Top-level FFT streaming interface.
@@ -14,13 +15,12 @@ import dsptools.numbers._
  * are generated only when the matching fields are enabled in [[FFTParams]].
  *
  * @param params FFT configuration used to size the stream, control, and status signals.
- * @tparam T     Real component data type used inside the complex samples.
  */
-class FFTTopIO[T <: Data: Ring](params: FFTParams[T]) extends Bundle {
+class FFTTopIO(params: FFTParams) extends Bundle {
   private val hasRuntimeConfig = params.runTime || params.divBy2Reg || params.directionReg
 
-  val in:  DecoupledIO[DspComplex[T]] = Flipped(Decoupled(params.inDataType))
-  val out: DecoupledIO[DspComplex[T]] = Decoupled(params.stageDataTypes(log2Up(params.fftSize) - 1))
+  val in:  DecoupledIO[DspComplex[FixedPoint]] = Flipped(Decoupled(params.inDataType))
+  val out: DecoupledIO[DspComplex[FixedPoint]] = Decoupled(params.fftOutputType)
 
   val i_last: Bool = Input(Bool())
   val o_last: Bool = Output(Bool())
@@ -34,7 +34,7 @@ class FFTTopIO[T <: Data: Ring](params: FFTParams[T]) extends Bundle {
 }
 
 object FFTTopIO {
-  def apply[T <: Data: Ring](params: FFTParams[T]): FFTTopIO[T] = new FFTTopIO(params)
+  def apply(params: FFTParams): FFTTopIO = new FFTTopIO(params)
 }
 
 /**
@@ -56,10 +56,9 @@ object FFTTopIO {
  *
  * @param params FFT hardware parameters, including size, radix, decimation, runtime controls,
  *               scaling, pipeline settings, and optional bit reversal.
- * @tparam T     Real component data type used inside the complex samples.
  */
-class FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) extends Module {
-  val io: FFTTopIO[T] = IO(FFTTopIO(params))
+class FFT(val params: FFTParams) extends Module {
+  val io: FFTTopIO = IO(FFTTopIO(params))
 
   private val bitReverseSuffix = if (params.useBitReverse) 1 else 0
   override def desiredName: String =
@@ -78,7 +77,7 @@ class FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) exten
     stageCount.U(stageCountWidth.W)
   }
 
-  private val fft: HasIO[T] = params.sdfRadix match {
+  private val fft: HasIO = params.sdfRadix match {
     case Radix2  => Module(new R2FFT(params))
     case Radix22 => Module(new R22FFT(params))
   }
@@ -92,28 +91,28 @@ class FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) exten
     connectDirect(fft)
   }
 
-  private def connectRuntimeConfig(fft: HasIO[T]): Unit = {
+  private def connectRuntimeConfig(fft: HasIO): Unit = {
     fft.io.i_load_cfg.foreach(_ := cfgLoad)
     if (params.runTime)      fft.io.i_size.get        := io.i_size.get
     if (params.divBy2Reg)    fft.io.i_divBy2.get      := io.i_divBy2.get
     if (params.directionReg) fft.io.i_fft_or_ifft.get := io.i_fft_or_ifft.get
   }
 
-  private def connectOverflow(fft: HasIO[T]): Unit = {
+  private def connectOverflow(fft: HasIO): Unit = {
     if (params.overflowReg) {
       io.overflow.get := fft.io.o_overflow.get
     }
   }
 
-  private def bitReverseParams: BitReverseParams[T] =
+  private def bitReverseParams: BitReverseParams =
     BitReverseParams(
-      dataType      = if (params.decimation == DIF) params.stageDataTypes.last else params.inDataType,
+      dataType      = if (params.decimation == DIF) params.fftOutputType else params.inDataType,
       memDepth      = params.fftSize,
       runTime       = params.runTime,
       singlePortMem = params.singlePortSRAM
     )
 
-  private def connectDirect(fft: HasIO[T]): Unit = {
+  private def connectDirect(fft: HasIO): Unit = {
     fft.io.in <> io.in
     fft.io.i_last := io.i_last
 
@@ -121,7 +120,7 @@ class FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) exten
     io.o_last := fft.io.o_last
   }
 
-  private def connectWithBitReverse(fft: HasIO[T]): Unit = {
+  private def connectWithBitReverse(fft: HasIO): Unit = {
     val bitReverse = withReset(cfgReset) { Module(new BitReverse(bitReverseParams)) }
     if (params.runTime) {
       bitReverse.io.i_samples.get := 1.U << activeStageCount
@@ -151,14 +150,14 @@ class FFT[T <: Data: Real: BinaryRepresentation](val params: FFTParams[T]) exten
 
 object FFTSimpleApp extends App {
   val wordSize = 16
+  val binaryPoint = wordSize - 2
   val fftSize = 512
   val isBitReverse = true
   val radix = Radix22
 
-  val params = FixedFFTConfig(
-    dataWidth = wordSize,
-    binaryPoint = 0,
-    twiddleWidth = 16,
+  val params = FFTParams(
+    inDataType = DspComplex(FixedPoint(wordSize.W, binaryPoint.BP)),
+    twiddleType = DspComplex(FixedPoint(16.W, 14.BP)),
     fftSize = fftSize,
     decimation = DIF,
     useBitReverse = isBitReverse,
@@ -167,7 +166,7 @@ object FFTSimpleApp extends App {
     sdfRadix = radix,
     runTime = true,
     minSRAMdepth = 8
-  ).toFFTParams
+  )
 
   (new ChiselStage).execute(
     Array("--target", "systemverilog"),

@@ -4,10 +4,12 @@ import chisel3._
 import chisel3.util._
 import dsptools._
 import dsptools.numbers._
+import fixedpoint.FixedPoint
 
-case class RadixParams[T <: Data] (
-  dataType     : DspComplex[T],
-  twiddleType  : DspComplex[T],
+case class RadixParams (
+  inDataType   : DspComplex[FixedPoint],
+  outDataType  : DspComplex[FixedPoint],
+  twiddleType  : DspComplex[FixedPoint],
   stageSize    : Int,
   decimation   : DecimationType,
   overflowReg  : Boolean,

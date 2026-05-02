@@ -4,17 +4,18 @@ import chisel3._
 import chisel3.util._
 import dsptools._
 import dsptools.numbers._
+import fixedpoint.FixedPoint
 
 /** Quarter-wave sine LUT for N = FFT size, i = 0 .. FFT_size/4 */
 object QuarterWaveSineLUT {
-  def apply[T <: Data : Real](FFT_size: Int, protoTwiddle: DspComplex[T]): Vec[T] = {
+  def apply(FFT_size: Int, protoTwiddle: DspComplex[FixedPoint]): Vec[FixedPoint] = {
     require(FFT_size >= 4,      "FFT size must be at least 4")
     require(FFT_size % 4 == 0,  "FFT size must be divisible by 4")
     val nDiv4 = FFT_size / 4
 
     VecInit((0 to nDiv4).map { i =>
       DspContext.withTrimType(Convergent) {
-        ConvertableTo[T].fromDoubleWithFixedWidth(math.sin(2 * math.Pi * i.toDouble / FFT_size.toDouble), protoTwiddle.real)
+        ConvertableTo[FixedPoint].fromDoubleWithFixedWidth(math.sin(2 * math.Pi * i.toDouble / FFT_size.toDouble), protoTwiddle.real)
       }
     })
   }
@@ -28,7 +29,7 @@ private[fft] object QuarterWaveTwiddle {
     require(FFT_size % 4 == 0     ,  "FFT size must be divisible by 4")
   }
 
-  def fromLogicalIndex[T <: Data : Real](k: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+  def fromLogicalIndex(k: UInt, stageN: Int, FFT_size: Int, LUT: Vec[FixedPoint]): DspComplex[FixedPoint] = {
     requireValidConfig(stageN, FFT_size)
 
     val stride   = FFT_size / stageN
@@ -63,7 +64,7 @@ private[fft] object QuarterWaveTwiddle {
 
 /** Radix-2^2 twiddle factors from the shared quarter-wave sine LUT. */
 object Radix22TwiddleFromLUT {
-  def apply[T <: Data : Real](address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+  def apply(address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[FixedPoint]): DspComplex[FixedPoint] = {
     QuarterWaveTwiddle.requireValidConfig(stageN, FFT_size)
 
     val nDiv4    = stageN / 4
@@ -88,7 +89,7 @@ object Radix22TwiddleFromLUT {
 
 /** Direct radix-2 twiddle factor from the shared quarter-wave sine LUT. */
 object Radix2TwiddleFromLUT {
-  def apply[T <: Data : Real](address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[T]): DspComplex[T] = {
+  def apply(address: UInt, stageN: Int, FFT_size: Int, LUT: Vec[FixedPoint]): DspComplex[FixedPoint] = {
     QuarterWaveTwiddle.fromLogicalIndex(address, stageN, FFT_size, LUT)
   }
 }

@@ -3,16 +3,17 @@ package opera.fft
 import chisel3._
 import chisel3.util._
 import dsptools.numbers._
+import fixedpoint.FixedPoint
 
-trait HasIO[T <: Data] extends Module {
-  val io: FFTIO[T]
+trait HasIO extends Module {
+  val io: FFTIO
 }
 
-class FFTIO[T <: Data: Ring](params: FFTParams[T]) extends Bundle {
+class FFTIO(params: FFTParams) extends Bundle {
   private val hasRuntimeConfig = params.runTime || params.divBy2Reg || params.directionReg
 
-  val in : DecoupledIO[DspComplex[T]] = Flipped(Decoupled(params.inDataType))
-  val out: DecoupledIO[DspComplex[T]] = Decoupled(params.stageDataTypes(log2Ceil(params.fftSize) - 1))
+  val in : DecoupledIO[DspComplex[FixedPoint]] = Flipped(Decoupled(params.inDataType))
+  val out: DecoupledIO[DspComplex[FixedPoint]] = Decoupled(params.fftOutputType)
   val i_last: Bool = Input(Bool())
   val o_last: Bool = Output(Bool())
   // Control

@@ -6,8 +6,8 @@ import dsptools._
 import dsptools.numbers._
 import fixedpoint._
 
-class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
-  val params: RadixParams[T],
+class R22SDF(
+  val params: RadixParams,
 ) extends Module {
   require(params.delay == params.stageSize / 2, s"R22SDF expects delay = stageSize / 2, got delay=${params.delay}, stageSize=${params.stageSize}")
 
@@ -17,16 +17,18 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   private val controlLatency = if (params.decimation == DIF) 0 else latency
 
   // IOs
-  val io: RadixIO[T] = IO(new RadixIO(params))
+  val io: RadixIO = IO(new RadixIO(params))
 
   // Wires
   private val w_delay_mux_ctrl     = Wire(Bool())
-  private val w_delay_in           = Wire(params.dataType)
-  private val w_delay_out          = Wire(params.dataType)
-  private val w_butterfly          = Butterfly[T](Seq(w_delay_out, io.in))
-  private val w_butterfly_scaled   = Seq.fill(2)(Wire(params.dataType))
+  private val w_delay_in           = Wire(params.outDataType)
+  private val w_delay_out          = Wire(params.outDataType)
+  private val w_delay_butterfly    = Wire(params.inDataType)
+  private val w_input_for_delay    = Wire(params.outDataType)
+  private val w_butterfly          = Butterfly(Seq(w_delay_butterfly, io.in))
+  private val w_butterfly_scaled   = Seq.fill(2)(Wire(params.outDataType))
   private val w_output_mux_ctrl    = Wire(Bool())
-  private val w_output_before_pipe = Wire(params.dataType)
+  private val w_output_before_pipe = Wire(params.outDataType)
   private val w_overflow           = Wire(Bool())
 
   // Registers
@@ -41,7 +43,9 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
   io.o_en := ShiftRegister(io.i_en, latency + params.addPipeRegs, false.B, true.B)
 
   // Delay buffer connections and control
-  w_delay_in        := Mux(w_delay_mux_ctrl, io.in, w_butterfly_scaled(1))
+  w_delay_butterfly := w_delay_out
+  w_input_for_delay := io.in
+  w_delay_in        := Mux(w_delay_mux_ctrl, w_input_for_delay, w_butterfly_scaled(1))
   w_delay_out       := DelayBuffer(w_delay_in, delay, r_delay_enable, params.singlePortMem, params.bufferAsMem)
 
   private val inFirstHalf = !r_counter(log2Ceil(params.stageSize) - 1)
@@ -66,7 +70,7 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
       }
     )
 
-    params.dataType.real match {
+    params.inDataType.real match {
       case _: FixedPoint =>
         w_overflow := Seq(w_butterfly.head.real, w_butterfly.head.imag, w_butterfly.last.real, w_butterfly.last.imag).map { data =>
           val u = data.asUInt
@@ -76,11 +80,11 @@ class R22SDF[T <: Data: Real: Ring: BinaryRepresentation](
         w_overflow := false.B
     }
 
-    val butterfly_pass = Seq.fill(2)(Wire(params.dataType))
+    val butterfly_pass = Seq.fill(2)(Wire(params.outDataType))
     butterfly_pass.head := w_butterfly.head
     butterfly_pass.last := w_butterfly.last
 
-    val butterfly_div_2_scaled = Seq.fill(2)(Wire(params.dataType))
+    val butterfly_div_2_scaled = Seq.fill(2)(Wire(params.outDataType))
     butterfly_div_2_scaled.head := butterfly_div_2.head
     butterfly_div_2_scaled.last := butterfly_div_2.last
 
