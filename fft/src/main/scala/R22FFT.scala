@@ -6,28 +6,30 @@ import dsptools._
 import dsptools.numbers._
 import fixedpoint.FixedPoint
 
-// TODO: For output scaling maybe do div2 instead of truncation. More logic but more accurate
-// TODO: Refactor the names of signals. Use either name_second_name or nameSecondName consistently, and make sure the names are descriptive enough to understand their purpose without needing comments.
 class R22FFT(val params: FFTParams) extends Module with HasIO {
   val io: FFTIO = IO(new FFTIO(params))
 
   // Constants
-  private val isItDIF        = params.decimation == DIF
-  private val noOfStages     = log2Ceil(params.fftSize)
-  private val evenNoOfStages = noOfStages % 2 == 0
-  private val stageDelays    = (if (isItDIF) (0 until noOfStages).reverse else 0 until noOfStages).map(i => 1 << i)
-  private val noOfTwiddles   = (noOfStages - 1) / 2
-  private val stageCountWidth = log2Ceil(noOfStages) + 1
+  private val isItDIF          = params.decimation == DIF
+  private val noOfStages       = log2Ceil(params.fftSize)
+  private val stageDelays      = (if (isItDIF) (0 until noOfStages).reverse else 0 until noOfStages).map(i => 1 << i)
+  private val stageSizes       = stageDelays.map(_ << 1)
+  private val cumulativeDelays = stageDelays.scanLeft(0)(_ + _)
+  private val noOfTwiddles     = (noOfStages - 1) / 2
+  private val stageCountWidth  = log2Ceil(noOfStages) + 1
   private val stageRoleIndices = (0 until noOfStages).map(i => if (isItDIF) i else noOfStages - i - 1)
-  private val staticStageOdd = stageRoleIndices.map(i => (i & 1) == 1)
+  private val staticStageOdd   = stageRoleIndices.map(i => (i & 1) == 1)
   private val stageHasTwiddleControl = (0 until noOfStages).map(i => if (isItDIF) i != noOfStages - 1 else i != 0)
+
+  require(params.fftSize >= 4, "R22FFT supports fftSize >= 4")
+  require((noOfStages & 1) == 0, s"R22FFT supports only 4^N FFT sizes, got fftSize=${params.fftSize}")
 
   if (params.runTime) {
     (1 until noOfStages by 2).filter(_ + 1 < noOfStages).foreach { i =>
       require(
         params.resolvedTwiddleTrimTypes(i) == params.resolvedTwiddleTrimTypes(i + 1),
         s"R22FFT runtime mode shares a twiddle multiplier between stages $i and ${i + 1}; " +
-          s"twiddleTrimTypes must match, got ${params.resolvedTwiddleTrimTypes(i)} and ${params.resolvedTwiddleTrimTypes(i + 1)}"
+          s"twiddleTrimTypes must match, got ${params.resolvedTwiddleTrimTypes(i)} and ${i + 1}: ${params.resolvedTwiddleTrimTypes(i + 1)}"
       )
     }
   }
@@ -42,143 +44,163 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   private val r_num_stages      = if (params.runTime) Some(RegInit(noOfStages.U(stageCountWidth.W))) else None
   private val r_fft_or_ifft     = if (params.directionReg) Some(RegInit(params.direction.B)) else None
   private val r_divBy2          = if (params.divBy2Reg) Some(RegInit(VecInit(params.stageDivBy2.map(_.B)))) else None
-  private val r_counters_msb    = RegInit(VecInit(Seq.fill(noOfStages)(false.B)))
-  private val outputSampleCount = RegInit(0.U(log2Ceil(params.fftSize).W))
+  private val r_pending_num_stages = if (params.runTime) Some(RegInit(noOfStages.U(stageCountWidth.W))) else None
+  private val r_pending_fft_or_ifft = if (params.directionReg) Some(RegInit(params.direction.B)) else None
+  private val r_pending_divBy2 = if (params.divBy2Reg) Some(RegInit(VecInit(params.stageDivBy2.map(_.B)))) else None
+  private val r_cfg_drain_pending = if (params.runTime) Some(RegInit(false.B)) else None
+  private val r_apply_pending_cfg = if (params.runTime) Some(RegInit(false.B)) else None
+  private val r_static_ctrl_pending = if (!params.runTime && (params.directionReg || params.divBy2Reg)) Some(RegInit(false.B)) else None
+  private val r_core_count = RegInit(0.U(log2Ceil(params.fftSize).W))
+  private val r_initial_out_done = RegInit(false.B)
+  private val r_out_count = RegInit(0.U(log2Ceil(params.fftSize).W))
+  private val r_in_prime_count = RegInit(0.U(log2Ceil(params.fftSize + 1).W))
+  private val r_pending_output_samples = RegInit(0.U(log2Ceil(params.fftSize + 2 * outputQueueReserve + 2).W))
 
   // Wires
-  private val w_output         = Wire(params.fftOutputType)
-  private val w_stage_outputs  = Wire(Vec(noOfStages, params.fftOutputType))
-  private val w_mul_outputs    = Wire(Vec(noOfStages, params.fftOutputType))
-  private val w_invert_signals = Wire(Vec(noOfStages, Bool()))
+  private val w_pair_mul_outputs =
+    if (noOfTwiddles > 0) Some(Wire(MixedVec((0 until noOfTwiddles).map { pair =>
+      if (isItDIF) params.stageOutputType((pair << 1) + 1) else params.stageInputType((pair << 1) + 2)
+    }))) else None
+  private val w_out_frame_busy = Wire(Bool())
+  private val w_drain_done     = if (params.runTime) Some(Wire(Bool())) else None
+  private val w_core_ready     = Wire(Bool())
+  private val w_core_in_fire   = Wire(Bool())
+  private val w_in_fire        = Wire(Bool())
+  private val w_core_in        = Wire(params.inDataType)
 
   // Twiddle factor infrastructure
-  private val w_lookup_twiddles = Wire(Vec(noOfTwiddles, params.twiddleType))
-  private val w_lookup_address  = Wire(Vec(noOfTwiddles, UInt(noOfStages.W)))
-  private val w_twiddles        = Wire(Vec(noOfStages, params.twiddleType))
-  private val w_twiddle_address = Wire(Vec(noOfStages, UInt(noOfStages.W)))
-  private val LUT               = QuarterWaveSineLUT(1 << noOfStages, params.twiddleType)
+  private val LUT = if (noOfTwiddles > 0) Some(QuarterWaveSineLUT(1 << noOfStages, params.twiddleType)) else None
+  private val w_pair_twiddles =
+    if (noOfTwiddles > 0) Some(Wire(Vec(noOfTwiddles, params.twiddleType))) else None
 
   // Runtime-derived signals
-  private val cfgLoad          = io.i_load_cfg.getOrElse(false.B)
-  private val cfgReset         = reset.asBool || cfgLoad
-  private val activeStageCount = r_num_stages.getOrElse(noOfStages.U(stageCountWidth.W))
-  private val firstActiveStage = noOfStages.U - activeStageCount
-  private val activeFftSize    = if (params.runTime) 1.U << activeStageCount else params.fftSize.U
-  private val isShiftedAddress = if (params.runTime) activeStageCount(0) ^ (noOfStages & 1).B else false.B
-  private val fftOrIfft        = r_fft_or_ifft.getOrElse(params.direction.B)
-  private val runtimeDifInputs = if (params.runTime && isItDIF) {
-    val delayed = Wire(Vec(noOfStages, params.inDataType))
-    delayed(0) := io.in.bits
-    for (i <- 1 until noOfStages) {
-      delayed(i) := ShiftRegister(delayed(i - 1), stageLatency, true.B)
+  private val w_raw_cfg_load = io.i_load_cfg.getOrElse(false.B)
+  private val w_runtime_drain_pending = r_cfg_drain_pending.getOrElse(false.B)
+  private val w_runtime_apply_pending = r_apply_pending_cfg.getOrElse(false.B)
+  private val w_apply_raw_cfg =
+    if (!params.runTime) false.B
+    else if (params.useBitReverse) w_raw_cfg_load
+    else w_raw_cfg_load && !w_runtime_drain_pending && !w_out_frame_busy
+  private val w_cfg_load = if (params.runTime) w_apply_raw_cfg || w_runtime_apply_pending else false.B
+  private val w_cfg_reset = reset.asBool || w_cfg_load
+  private val w_active_stage_count = r_num_stages.getOrElse(noOfStages.U(stageCountWidth.W))
+  private val w_first_active_stage = noOfStages.U - w_active_stage_count
+  private val w_active_fft_size = (if (params.runTime) 1.U << w_active_stage_count else params.fftSize.U).asTypeOf(r_in_prime_count)
+  private val w_fft_or_ifft = r_fft_or_ifft.getOrElse(params.direction.B)
+
+  if (params.runTime) {
+    when(w_raw_cfg_load) {
+      assert(io.i_size.get >= 2.U, "R22FFT runtime i_size must select at least 4 points")
+      assert(!io.i_size.get(0), "R22FFT runtime i_size must be even, selecting only 4^N active FFT sizes")
     }
-    Some(delayed)
-  } else {
-    None
   }
 
-  // Stage helpers
-  private def stageOdd(i: Int): Bool       = if (params.runTime) (stageRoleIndices(i).U - firstActiveStage)(0) else staticStageOdd(i).B
-  private def stageActive(i: Int): Bool    = if (params.runTime) firstActiveStage <= stageRoleIndices(i).U else true.B
+  // Stage schedule
+  private val w_zero_twiddle = 0.U.asTypeOf(params.twiddleType)
+  private val w_active_cumulative_delay =
+    if (params.runTime && isItDIF) VecInit(cumulativeDelays.map(_.U(log2Ceil(params.fftSize + 1).W)))(w_first_active_stage(log2Ceil(noOfStages + 1) - 1, 0))
+    else 0.U(log2Ceil(params.fftSize + 1).W)
+
+  private def cfgDelay[T <: Data](data: T, cycles: Int, init: T): T =
+    withReset(w_cfg_reset) { ShiftRegister(data, cycles, init, true.B) }
+  private def stageActive(i: Int): Bool = if (params.runTime) w_first_active_stage <= stageRoleIndices(i).U else true.B
+  private def stageOdd(i: Int): Bool = if (params.runTime) (stageRoleIndices(i).U - w_first_active_stage)(0) else staticStageOdd(i).B
   private def stageActiveOdd(i: Int): Bool = if (params.runTime) stageActive(i) && stageOdd(i) else staticStageOdd(i).B
+  private def finalStage[T <: Data](stageData: Seq[T]): T =
+    if (params.runTime && !isItDIF) VecInit(stageData)((w_active_stage_count - 1.U)(log2Ceil(noOfStages) - 1, 0)) else stageData.last
 
-  // Datapath helpers
-  private def asFftOutput(data: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
-    val out = Wire(params.fftOutputType)
-    out := data
-    out
+  private case class StageSchedule(w_i_en: Bool, w_i_count: UInt, w_o_en: Bool, w_o_count: UInt)
+  private val w_stage_schedule = (0 until noOfStages).foldLeft(Seq.empty[StageSchedule]) { (acc, i) =>
+    val w_prev_en = if (i == 0) w_core_in_fire else acc.last.w_o_en
+    val w_prev_count = if (i == 0) r_core_count else acc.last.w_o_count
+    val w_load_core = if (params.runTime && isItDIF) i.U === w_first_active_stage else (i == 0).B
+    val w_i_en = if (params.runTime) Mux(stageActive(i), Mux(w_load_core, w_core_in_fire, w_prev_en), false.B) else w_prev_en
+    val w_i_count = if (params.runTime) Mux(stageActive(i), Mux(w_load_core, r_core_count, w_prev_count), 0.U) else w_prev_count
+    acc :+ StageSchedule(w_i_en, w_i_count, cfgDelay(w_i_en, stageLatency, false.B), cfgDelay(w_i_count, stageLatency, 0.U.asTypeOf(w_i_count)))
   }
 
-  private def asStageInput(index: Int, data: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
-    val out = Wire(params.stageInputType(index))
-    out := data
-    out
+  private def bypassOrInverted(index: Int, data: DspComplex[FixedPoint], inverted: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
+    val w_inverted_d = ShiftRegister(inverted, complexMulLatency)
+    if (params.runTime) Mux(!stageActiveOdd(index), w_inverted_d, data)
+    else if (staticStageOdd(index)) data
+    else w_inverted_d
   }
 
-  private def asStageOutput(index: Int, data: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
-    val out = Wire(params.stageOutputType(index))
-    out := data
-    out
+  private def twiddleMul(
+      index:     Int,
+      data:      DspComplex[FixedPoint],
+      twiddle:   DspComplex[FixedPoint],
+      inputType: DspComplex[FixedPoint],
+  ): DspComplex[FixedPoint] =
+    Utils.complexMul(data, twiddle, inputType, params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
+
+  private def twiddleAddress(index: Int): UInt = {
+    val w_offset =
+      if (isItDIF) cumulativeDelays(index + 1).U(log2Ceil(params.fftSize + 1).W) - w_active_cumulative_delay
+      else cumulativeDelays(index).U(log2Ceil(params.fftSize + 1).W)
+    (w_stage_schedule(index).w_i_count - w_offset).asTypeOf(UInt(noOfStages.W))
   }
 
-  private def bypassOrInverted(index: Int, data: DspComplex[FixedPoint], inverted: DspComplex[FixedPoint]): DspComplex[FixedPoint] =
-    if (params.runTime) Mux(!stageActiveOdd(index), asFftOutput(ShiftRegister(inverted, complexMulLatency, true.B)), asFftOutput(data))
-    else if (staticStageOdd(index)) asFftOutput(data)
-    else asFftOutput(ShiftRegister(inverted, complexMulLatency, true.B))
-
-  // Twiddle control helpers
-  private def clearStageTwiddleControl(i: Int): Unit = {
-    w_invert_signals(i)  := false.B
-    w_twiddle_address(i) := 0.U
-    w_twiddles(i)        := 0.U.asTypeOf(w_twiddles(i))
-  }
-
-  private def wireNonTrivialTwiddle(stage: R22SDF, i: Int): Unit = {
-    val counterWrap = stage.io.o_counter === ((1 << stage.io.o_counter.getWidth) - 1).U
-    w_invert_signals(i) := false.B
-    when(!cfgLoad && stage.io.i_en && counterWrap) {
-      r_counters_msb(i) := ~r_counters_msb(i)
+  private def pairTwiddleForStage(index: Int): DspComplex[FixedPoint] =
+    if (noOfTwiddles == 0) w_zero_twiddle
+    else if (noOfTwiddles == 1) w_pair_twiddles.get(0)
+    else {
+      val pair = if (isItDIF) index >> 1 else (index - 1) >> 1
+      if (pair >= 0 && pair < noOfTwiddles) w_pair_twiddles.get(pair) else w_zero_twiddle
     }
-    w_twiddle_address(i) := (if (isItDIF) {
-      Utils.difTwiddleAddress(i, stage.io.o_counter, r_counters_msb(i), noOfStages, params.runTime, isShiftedAddress)
-    } else {
-      Utils.ditTwiddleAddress(i, stage.io.o_counter, r_counters_msb(i), noOfStages, params.runTime, isShiftedAddress)
-    })
 
-    val twiddle =
-      if (noOfTwiddles == 0) 0.U.asTypeOf(params.twiddleType)
-      else if (noOfTwiddles == 1) w_lookup_twiddles(0)
-      else if (params.runTime && isItDIF) {
-        val twIdx = log2Ceil(noOfTwiddles)
-        val idx = Mux(isShiftedAddress,
-          ((i >> 1).U - 1.U).asTypeOf(UInt(twIdx.W)),
-          (i.U >> 1.U).asTypeOf(UInt(twIdx.W)))
-        w_lookup_twiddles(idx)
+  private def trivialInvert(index: Int, stage: R22SDF): Bool = {
+    val width = log2Ceil(stageSizes(index))
+    val w_raw =
+      if (isItDIF) {
+        if (stageSizes(index) < 4) stage.io.o_counter < stageDelays(index).U
+        else stage.io.o_counter(width - 1, width - 2) === 1.U
       } else {
-        val idx = if (isItDIF || !evenNoOfStages) i >> 1 else (i - 1) >> 1
-        if (idx >= 0 && idx < noOfTwiddles) w_lookup_twiddles(idx) else 0.U.asTypeOf(params.twiddleType)
+        if (stageSizes(index) < 4) stage.io.o_counter >= (stageDelays(index) * 3 / 2).U
+        else stage.io.o_counter(width - 1, width - 2).andR
       }
-    w_twiddles(i) := (if (isItDIF) ShiftRegister(twiddle, params.numAddPipes, true.B) else twiddle)
+    if (isItDIF) cfgDelay(w_raw, params.numAddPipes, false.B) else w_raw
   }
 
-  private def wireTrivialInversion(stage: R22SDF, i: Int, delay: Int): Unit = {
-    val invert = if (isItDIF) stage.io.o_counter >= (delay.U >> 1) && stage.io.o_counter < delay.U else stage.io.o_counter >= (delay * 3 / 2).U
-    w_invert_signals(i) := (if (isItDIF) ShiftRegister(invert, params.numAddPipes, true.B) else invert)
-    w_twiddle_address(i) := 0.U
-    w_twiddles(i)        := 0.U.asTypeOf(w_twiddles(i))
+  if (params.runTime) {
+    when(r_apply_pending_cfg.get) {
+      r_cfg_drain_pending.get := false.B
+      r_apply_pending_cfg.get := false.B
+    }.elsewhen(w_raw_cfg_load && !w_apply_raw_cfg) {
+      r_pending_num_stages.get := io.i_size.get
+      if (params.directionReg) r_pending_fft_or_ifft.get := io.i_fft_or_ifft.get
+      if (params.divBy2Reg)    r_pending_divBy2.get      := io.i_divBy2.get
+      r_cfg_drain_pending.get := true.B
+      r_apply_pending_cfg.get := false.B
+    }.elsewhen(w_drain_done.get) {
+      r_apply_pending_cfg.get := true.B
+    }
+
+    when(w_apply_raw_cfg || r_apply_pending_cfg.get) {
+      r_num_stages.get := Mux(w_apply_raw_cfg, io.i_size.get, r_pending_num_stages.get)
+      if (params.directionReg) r_fft_or_ifft.get := Mux(w_apply_raw_cfg, io.i_fft_or_ifft.get, r_pending_fft_or_ifft.get)
+      if (params.divBy2Reg)    r_divBy2.get      := Mux(w_apply_raw_cfg, io.i_divBy2.get, r_pending_divBy2.get)
+    }
   }
 
-  when(cfgLoad) {
-    if (params.runTime)      r_num_stages.get  := io.i_size.get
-    if (params.directionReg) r_fft_or_ifft.get := io.i_fft_or_ifft.get
-    if (params.divBy2Reg)    r_divBy2.get      := io.i_divBy2.get
-    r_counters_msb := VecInit(Seq.fill(noOfStages)(false.B))
+  if (noOfTwiddles > 0) {
+    (0 until noOfTwiddles).foreach { pair =>
+      val lookupIndex = if (isItDIF) pair else noOfTwiddles - 1 - pair
+      val sourceStage = (lookupIndex << 1) + (if (isItDIF) 1 else 2)
+      val stageN = 1 << (noOfStages - (pair << 1))
+      w_pair_twiddles.get(lookupIndex) :=
+        Radix22TwiddleFromLUT(twiddleAddress(sourceStage)(log2Ceil(stageN) - 1, 0), stageN, 1 << noOfStages, LUT.get)
+    }
   }
 
-  // Twiddle LUT wiring
-  w_lookup_address.zipWithIndex.foreach {
-    case (address, i) =>
-      val evenOff = if (evenNoOfStages) 1 else 0
-      val (shiftedOffset, normalOffset) = if (isItDIF) (2, 1) else (evenOff, evenOff + 1)
-      address := (if (params.runTime)
-        Mux(isShiftedAddress, w_twiddle_address((i << 1) + shiftedOffset), w_twiddle_address((i << 1) + normalOffset))
-      else w_twiddle_address((i << 1) + normalOffset))
-  }
-  (0 until noOfStages by 2).dropRight(1).zipWithIndex.foreach {
-    case (m, i) =>
-      val stageN = 1 << (noOfStages - m)
-      w_lookup_twiddles(if (isItDIF) i else noOfTwiddles - 1 - i) :=
-        Radix22TwiddleFromLUT(w_lookup_address(if (isItDIF) i else noOfTwiddles - 1 - i)(log2Ceil(stageN) - 1, 0), stageN, 1 << noOfStages, LUT)
-  }
-
-  // Stage instantiation and twiddle address generation
+  // Stage instantiation and twiddle control
   val sdf_stages: Seq[R22SDF] = stageDelays.zipWithIndex.map {
     case (delay, i) =>
-      val stage = withReset(cfgReset) { Module(new R22SDF(RadixParams(
+      val stage = withReset(w_cfg_reset) { Module(new R22SDF(RadixParams(
         inDataType   = params.stageInputType(i),
         outDataType  = params.stageOutputType(i),
         twiddleType   = params.twiddleType,
-        stageSize     = if (isItDIF) params.fftSize >> i else 2 << i,
+        stageSize     = stageSizes(i),
         decimation    = params.decimation,
         overflowReg   = params.overflowReg,
         divBy2Reg     = params.divBy2Reg,
@@ -194,129 +216,179 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
         trimType      = params.resolvedStageTrimTypes(i),
       ))) }
 
-      if (params.divBy2Reg)   stage.io.i_divBy2.get  := r_divBy2.get(i)
-      if (params.overflowReg) io.o_overflow.get(i)   := stage.io.o_overflow.get
+      if (params.divBy2Reg)   stage.io.i_divBy2.get := r_divBy2.get(i)
+      if (params.overflowReg) io.o_overflow.get(i)  := stage.io.o_overflow.get
 
-      // Twiddle address generation and inversion-signal logic
-      if (!params.runTime && !stageHasTwiddleControl(i)) {
-        clearStageTwiddleControl(i)
-      } else if (params.runTime) {
-        when(stageHasTwiddleControl(i).B && stageActive(i)) {
-          when(stageOdd(i)) { wireNonTrivialTwiddle(stage, i) }
-            .otherwise      { wireTrivialInversion(stage, i, delay) }
-        }.otherwise { clearStageTwiddleControl(i) }
-      } else {
-        if (staticStageOdd(i)) wireNonTrivialTwiddle(stage, i) else wireTrivialInversion(stage, i, delay)
-      }
-      // Return the instantiated stage for connection in the data path
       stage
   }
 
-  // Enable chain: stage 0 enabled by input, each stage enables next stage
-  sdf_stages.scanLeft(io.in.fire) { case (en, s) => s.io.i_en := en; s.io.o_en }
+  private val w_stage_controls = sdf_stages.zipWithIndex.map { case (stage, i) =>
+    val w_has_control = stageHasTwiddleControl(i).B && stageActive(i)
+    val w_nontrivial_twiddle =
+      if (params.runTime || stageHasTwiddleControl(i)) {
+        val w_pair_twiddle = pairTwiddleForStage(i)
+        if (isItDIF) ShiftRegister(w_pair_twiddle, params.numAddPipes) else w_pair_twiddle
+      } else {
+        w_zero_twiddle
+      }
+    val w_invert =
+      if (params.runTime) Mux(w_has_control && !stageOdd(i), trivialInvert(i, stage), false.B)
+      else if (stageHasTwiddleControl(i) && !staticStageOdd(i)) trivialInvert(i, stage) else false.B
+    val w_twiddle =
+      if (params.runTime) Mux(w_has_control && stageOdd(i), w_nontrivial_twiddle, w_zero_twiddle)
+      else if (stageHasTwiddleControl(i) && staticStageOdd(i)) w_nontrivial_twiddle else w_zero_twiddle
+    (w_invert, w_twiddle)
+  }
 
-  // Data path: connect stages in series, applying twiddle factors and/or inversion as needed
-  val firstStageInput = if (params.runTime) Mux(stageActive(0), io.in.bits, 0.U.asTypeOf(params.inDataType)) else io.in.bits
-  sdf_stages.map(_.io).zipWithIndex.foldLeft(firstStageInput) {
-    case (prev_out, (stage, index)) =>
-      w_stage_outputs(index) := stage.out
+  // Enable chain: valid and counter phase move through the active SDF stages.
+  sdf_stages.zipWithIndex.foreach { case (s, index) =>
+    s.io.i_en := w_stage_schedule(index).w_i_en
+  }
+
+  // Data path: connect stages in series, applying radix-2^2 trivial rotations and shared twiddles.
+  val w_chain_outputs = sdf_stages.map(_.io).zipWithIndex.scanLeft(w_core_in: DspComplex[FixedPoint]) {
+    case (prevOut, (stage, index)) =>
+      val w_prev_stage_in = Utils.resizeComplex(prevOut, stage.in.cloneType)
+      val w_core_stage_in = Utils.resizeComplex(w_core_in, stage.in.cloneType)
+      val (w_invert, w_twiddle) = w_stage_controls(index)
+
       if (isItDIF) {
-        stage.in := (if (params.runTime) {
-          val runtimeInput = asStageInput(index, runtimeDifInputs.get.apply(index))
-          val chainInput = asStageInput(index, prev_out)
-          Mux(
-            stageActive(index),
-            Mux(index.U === firstActiveStage, runtimeInput, chainInput),
-            0.U.asTypeOf(stage.in)
-          )
-        } else if (index == 0) io.in.bits else asStageInput(index, prev_out))
+        val w_stage_in = Wire(stage.in.cloneType)
+        if (params.runTime) {
+          w_stage_in := Mux(stageActive(index), Mux(index.U === w_first_active_stage, w_core_stage_in, w_prev_stage_in), 0.U.asTypeOf(stage.in))
+        } else if (index == 0) {
+          w_stage_in := w_core_stage_in
+        } else {
+          w_stage_in := w_prev_stage_in
+        }
 
-        val inverted = Utils.invertComplexData(stage.out, w_invert_signals(index))
-        val out = Wire(params.fftOutputType)
+        stage.in := w_stage_in
+        val w_inverted = Utils.invertComplexData(stage.out, w_invert)
+        val w_out = Wire(stage.out.cloneType)
 
         if (index == 0 || index == noOfStages - 1) {
-          val passData = Wire(params.stageOutputType(index))
-          passData := (if (index == 0) Mux(stageActive(index), inverted, 0.U.asTypeOf(passData)) else stage.out)
-          w_mul_outputs(index) := passData
-          out := ShiftRegister(asFftOutput(passData), complexMulLatency, true.B)
+          val w_pass_data = if (index == 0) Mux(stageActive(index), w_inverted, 0.U.asTypeOf(stage.out)) else stage.out
+          w_out := ShiftRegister(w_pass_data, complexMulLatency)
         } else if (index % 2 == 1) {
-          val activeData = asStageOutput(index, stage.out)
-          val fallbackData = asStageOutput(index, w_stage_outputs(index + 1))
-          val multiplyInput = Mux(
+          val pair = index >> 1
+          val w_mul_input = Mux(
             stageActiveOdd(index),
-            activeData,
-            Mux(stageActive(index), fallbackData, 0.U.asTypeOf(activeData))
+            stage.out,
+            Mux(stageActive(index), sdf_stages(index + 1).io.out.asTypeOf(stage.out), 0.U.asTypeOf(stage.out))
           )
-          w_mul_outputs(index) := Utils.complexMul(
-            multiplyInput,
-            Mux(stageActiveOdd(index), w_twiddles(index), Mux(stageActive(index), w_twiddles(index + 1), 0.U.asTypeOf(params.twiddleType))).asTypeOf(params.twiddleType),
-            params.stageOutputType(index),
-            params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
-          out := bypassOrInverted(index, w_mul_outputs(index), inverted)
+          val w_mul_twiddle = Mux(
+            stageActiveOdd(index),
+            w_twiddle,
+            Mux(stageActive(index), w_stage_controls(index + 1)._2, w_zero_twiddle)
+          )
+          w_pair_mul_outputs.get(pair) := twiddleMul(index, w_mul_input, w_mul_twiddle, params.stageOutputType(index))
+          w_out := bypassOrInverted(index, w_pair_mul_outputs.get(pair).asTypeOf(stage.out), w_inverted)
         } else {
-          w_mul_outputs(index) := w_mul_outputs(index - 1)
-          out := bypassOrInverted(index, w_mul_outputs(index), inverted)
+          w_out := bypassOrInverted(index, w_pair_mul_outputs.get((index - 1) >> 1).asTypeOf(stage.out), w_inverted)
         }
-        out
+        w_out
       } else {
-        val prevStageInput = asStageInput(index, prev_out)
-        val inverted    = Utils.invertComplexData(prevStageInput, w_invert_signals(index))
-        val w_stage_out = Wire(stage.in.cloneType)
-        stage.in := w_stage_out
+        val w_inverted = Utils.invertComplexData(w_prev_stage_in, w_invert)
+        val w_stage_in = Wire(stage.in.cloneType)
+        stage.in := w_stage_in
 
         if (index == noOfStages - 1 || index == 0) {
-          val passData = Wire(params.stageInputType(index))
-          passData := (if (index == noOfStages - 1) Mux(stageActive(index), inverted, 0.U.asTypeOf(passData)) else prevStageInput)
-          w_mul_outputs(index) := passData
-          w_stage_out := ShiftRegister(passData, complexMulLatency, true.B)
-        } else if ((evenNoOfStages && index % 2 == 0) || (!evenNoOfStages && index % 2 == 1)) {
-          val fbData = if (evenNoOfStages) asStageInput(index, w_stage_outputs(index - 2)) else asStageInput(index, w_stage_outputs(index))
-          val fbTw   = if (evenNoOfStages) w_twiddles(index - 1)      else w_twiddles(index + 1)
-          val multiplyInput = Mux(
-            stageActiveOdd(index),
-            prevStageInput,
-            Mux(stageActive(index), fbData, 0.U.asTypeOf(prevStageInput))
-          )
-          w_mul_outputs(index) := Utils.complexMul(
-            multiplyInput,
-            Mux(stageActiveOdd(index), w_twiddles(index), Mux(stageActive(index), fbTw, 0.U.asTypeOf(params.twiddleType))).asTypeOf(params.twiddleType),
-            params.stageInputType(index),
-            params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
-          w_stage_out := bypassOrInverted(index, w_mul_outputs(index), inverted)
+          val w_pass_data = if (index == noOfStages - 1) Mux(stageActive(index), w_inverted, 0.U.asTypeOf(stage.in)) else w_prev_stage_in
+          w_stage_in := ShiftRegister(w_pass_data, complexMulLatency)
+        } else if (index % 2 == 0) {
+          val pair = (index - 2) >> 1
+          val w_fb_data = sdf_stages(index - 2).io.out.asTypeOf(stage.in)
+          val w_mul_input = Mux(stageActiveOdd(index), w_prev_stage_in, Mux(stageActive(index), w_fb_data, 0.U.asTypeOf(stage.in)))
+          val w_mul_twiddle = Mux(stageActiveOdd(index), w_twiddle, Mux(stageActive(index), w_stage_controls(index - 1)._2, w_zero_twiddle))
+          w_pair_mul_outputs.get(pair) := twiddleMul(index, w_mul_input, w_mul_twiddle, params.stageInputType(index))
+          w_stage_in := bypassOrInverted(index, w_pair_mul_outputs.get(pair).asTypeOf(stage.in), w_inverted)
         } else {
-          w_mul_outputs(index) := (if (evenNoOfStages) w_mul_outputs(index + 1) else w_mul_outputs(index - 1))
-          w_stage_out := bypassOrInverted(index, w_mul_outputs(index), inverted)
+          w_stage_in := bypassOrInverted(index, w_pair_mul_outputs.get((index - 1) >> 1).asTypeOf(stage.in), w_inverted)
         }
-        w_stage_outputs(index)
+
+        stage.out
       }
+  }.tail
+
+  val w_final_stage_valid = finalStage(w_stage_schedule.map(_.w_o_en))
+  val w_final_stage_count = finalStage(w_stage_schedule.map(_.w_o_count))
+  val w_last_sample = (w_active_fft_size - 1.U).asTypeOf(r_out_count)
+  val w_last_stage_frame_done = w_final_stage_valid && (w_final_stage_count === w_last_sample)
+  val w_output_sample_release = w_in_fire && (r_in_prime_count === w_active_fft_size)
+  val w_drain_out_en = w_runtime_drain_pending && !w_runtime_apply_pending
+  val w_output_sample_allowed = w_drain_out_en || r_pending_output_samples =/= 0.U || w_output_sample_release
+  val w_out_last = r_out_count === w_last_sample
+  if (params.runTime) {
+    w_drain_done.get := w_runtime_drain_pending && io.out.fire && w_out_last
   }
 
-  val finalStageIndex = (if (params.runTime && !isItDIF) activeStageCount - 1.U else (noOfStages - 1).U).asTypeOf(UInt(log2Ceil(noOfStages).W))
-  val stageTail = if (isItDIF) ShiftRegister(w_stage_outputs.last, complexMulLatency, true.B) else w_stage_outputs(finalStageIndex)
-
-  val lastStageValid = VecInit(sdf_stages.map(_.io.o_en))(finalStageIndex)
-  val outputLast = outputSampleCount === (activeFftSize - 1.U)
-  val outputValid = lastStageValid && !cfgLoad
-
-  val outQueue = withReset(cfgReset) {
-    Module(new Queue(UInt((stageTail.getWidth + 1).W), entries = 2 * outputQueueReserve, pipe = true, flow = true))
+  val outQueue = withReset(w_cfg_reset) {
+    Module(new Queue(UInt(params.fftOutputType.getWidth.W), entries = 2 * outputQueueReserve, pipe = true, flow = false))
   }
-  outQueue.io.enq.bits  := Cat(outputLast, stageTail.asUInt)
-  outQueue.io.enq.valid := outputValid
-  outQueue.io.deq.ready := io.out.ready && !cfgLoad
+  outQueue.io.enq.bits := (if (isItDIF) {
+    Utils.resizeComplex(ShiftRegister(sdf_stages.last.io.out, complexMulLatency), params.fftOutputType)
+  } else {
+    finalStage(w_chain_outputs.map(Utils.resizeComplex(_, params.fftOutputType)))
+  }).asUInt
+  outQueue.io.enq.valid := w_final_stage_valid && (r_initial_out_done || w_last_stage_frame_done) && !w_cfg_load && w_output_sample_allowed
+  outQueue.io.deq.ready := io.out.ready && !w_cfg_load
 
-  val outQueueHasReserve = outQueue.io.count < outputQueueReserve.U
-  io.in.ready  := !cfgLoad && outQueue.io.enq.ready && outQueueHasReserve
-  io.out.valid := outQueue.io.deq.valid && !cfgLoad
+  val w_cfg_draining = w_runtime_drain_pending && !w_cfg_load
+  w_core_ready := !w_cfg_load && outQueue.io.enq.ready && (outQueue.io.count < outputQueueReserve.U)
+  w_in_fire := !w_runtime_drain_pending && io.in.valid && w_core_ready
+  w_core_in_fire := (if (params.runTime) Mux(w_cfg_draining, w_core_ready, w_in_fire) else w_in_fire)
+  w_core_in := (if (params.runTime) Mux(w_cfg_draining, 0.U.asTypeOf(params.inDataType), io.in.bits) else io.in.bits)
+  io.in.ready  := !w_runtime_drain_pending && w_core_ready
+  io.out.valid := outQueue.io.deq.valid && !w_cfg_load
+  w_out_frame_busy := outQueue.io.deq.valid || r_out_count =/= 0.U
 
-  Utils.assignFftOutputByDirection(outQueue.io.deq.bits(stageTail.getWidth - 1, 0).asTypeOf(stageTail), w_output, fftOrIfft)
-  io.o_last := io.out.valid && outQueue.io.deq.bits(stageTail.getWidth)
+  Utils.assignFftOutputByDirection(outQueue.io.deq.bits.asTypeOf(params.fftOutputType), io.out.bits, w_fft_or_ifft)
+  io.o_last := io.out.valid && w_out_last
 
-  when(cfgLoad) {
-    outputSampleCount := 0.U
-  }.elsewhen(outQueue.io.enq.fire) {
-    outputSampleCount := Mux(outputLast, 0.U, outputSampleCount + 1.U)
+  val w_output_sample_queue = outQueue.io.enq.fire && !w_drain_out_en
+  def updateFrameState(): Unit = {
+    when(io.out.fire) {
+      r_out_count := Mux(w_out_last, 0.U, r_out_count + 1.U)
+    }
+    when(w_core_in_fire) {
+      r_core_count := Mux(r_core_count === w_last_sample, 0.U, r_core_count + 1.U)
+    }
+    r_initial_out_done := r_initial_out_done || w_last_stage_frame_done
+    when(w_in_fire && (r_in_prime_count =/= w_active_fft_size)) {
+      r_in_prime_count := r_in_prime_count + 1.U
+    }
+    when(w_output_sample_release =/= w_output_sample_queue) {
+      r_pending_output_samples := Mux(w_output_sample_release, r_pending_output_samples + 1.U, r_pending_output_samples - 1.U)
+    }
   }
 
-  io.out.bits := w_output
+  if (params.runTime) {
+    when(w_cfg_load) {
+      Seq(r_out_count, r_in_prime_count, r_pending_output_samples, r_core_count).foreach(_ := 0.U)
+      r_initial_out_done := false.B
+    }.otherwise {
+      updateFrameState()
+    }
+  } else {
+    updateFrameState()
+  }
+
+  if (!params.runTime && (params.directionReg || params.divBy2Reg)) {
+    val w_static_ctrl_apply = !w_out_frame_busy || (io.out.fire && w_out_last)
+
+    when(w_raw_cfg_load) {
+      if (params.directionReg) r_pending_fft_or_ifft.get := io.i_fft_or_ifft.get
+      if (params.divBy2Reg)    r_pending_divBy2.get      := io.i_divBy2.get
+      r_static_ctrl_pending.get := !w_static_ctrl_apply
+
+      when(w_static_ctrl_apply) {
+        if (params.directionReg) r_fft_or_ifft.get := io.i_fft_or_ifft.get
+        if (params.divBy2Reg)    r_divBy2.get      := io.i_divBy2.get
+      }
+    }.elsewhen(r_static_ctrl_pending.get && w_static_ctrl_apply) {
+      if (params.directionReg) r_fft_or_ifft.get := r_pending_fft_or_ifft.get
+      if (params.divBy2Reg)    r_divBy2.get      := r_pending_divBy2.get
+      r_static_ctrl_pending.get := false.B
+    }
+  }
 }

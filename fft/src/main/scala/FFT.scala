@@ -64,17 +64,104 @@ class FFT(val params: FFTParams) extends Module {
   override def desiredName: String =
     s"FFT_size_${params.fftSize}_width_${params.inDataType.real.getWidth}_radix_${params.sdfRadix.label}_bitreverse_$bitReverseSuffix"
 
-  private val cfgLoad         = io.i_load_cfg.getOrElse(false.B)
+  private val rawCfgLoad      = io.i_load_cfg.getOrElse(false.B)
+  private val cfgLoad         = WireDefault(rawCfgLoad)
   private val cfgReset        = reset.asBool || cfgLoad
   private val stageCount      = log2Ceil(params.fftSize)
   private val stageCountWidth = log2Ceil(params.fftSize)
 
+  private val cfgSizeValue = if (params.runTime) {
+    val value = Wire(UInt(stageCountWidth.W))
+    value := io.i_size.get
+    Some(value)
+  } else {
+    None
+  }
+
+  private val cfgDivBy2Value = if (params.divBy2Reg) {
+    val value = Wire(Vec(log2Up(params.fftSize), Bool()))
+    value := io.i_divBy2.get
+    Some(value)
+  } else {
+    None
+  }
+
+  private val cfgDirectionValue = if (params.directionReg) {
+    val value = Wire(Bool())
+    value := io.i_fft_or_ifft.get
+    Some(value)
+  } else {
+    None
+  }
+
+  private val wrapperOutputValid = WireDefault(false.B)
+  private val wrapperOutputFire  = WireDefault(false.B)
+  private val wrapperDraining    = WireDefault(false.B)
+
   private val activeStageCount = if (params.runTime) {
     val count = RegInit(stageCount.U(stageCountWidth.W))
-    when(cfgLoad) { count := io.i_size.get }
+    when(cfgLoad) { count := cfgSizeValue.get }
     count
   } else {
     stageCount.U(stageCountWidth.W)
+  }
+
+  if (params.useBitReverse) {
+    val outputFrameSampleCount = RegInit(0.U(log2Ceil(params.fftSize).W))
+    val outputInProgress       = RegNext(wrapperOutputValid, false.B) || outputFrameSampleCount =/= 0.U
+    val r_cfg_drain_pending    = RegInit(false.B)
+    val r_apply_pending_cfg    = RegInit(false.B)
+    val applyRawCfg            = rawCfgLoad && !r_cfg_drain_pending && !outputInProgress
+    val applyPendingCfg        = r_apply_pending_cfg
+
+    val r_pending_num_stages =
+      if (params.runTime) Some(RegInit(stageCount.U(stageCountWidth.W))) else None
+    val r_pending_divBy2 =
+      if (params.divBy2Reg) Some(RegInit(VecInit(params.stageDivBy2.map(_.B)))) else None
+    val r_pending_direction =
+      if (params.directionReg) Some(RegInit(params.direction.B)) else None
+
+    cfgLoad := applyRawCfg || applyPendingCfg
+    wrapperDraining := r_cfg_drain_pending && !cfgLoad
+
+    when(applyPendingCfg) {
+      r_cfg_drain_pending := false.B
+      r_apply_pending_cfg := false.B
+    }.elsewhen(rawCfgLoad && !applyRawCfg) {
+      if (params.runTime)      r_pending_num_stages.get := io.i_size.get
+      if (params.divBy2Reg)    r_pending_divBy2.get     := io.i_divBy2.get
+      if (params.directionReg) r_pending_direction.get  := io.i_fft_or_ifft.get
+      r_cfg_drain_pending := true.B
+      r_apply_pending_cfg := false.B
+    }
+
+    if (params.runTime) {
+      cfgSizeValue.get := Mux(applyPendingCfg, r_pending_num_stages.get, io.i_size.get)
+    }
+    if (params.divBy2Reg) {
+      cfgDivBy2Value.get := Mux(applyPendingCfg, r_pending_divBy2.get, io.i_divBy2.get)
+    }
+    if (params.directionReg) {
+      cfgDirectionValue.get := Mux(applyPendingCfg, r_pending_direction.get, io.i_fft_or_ifft.get)
+    }
+
+    val activeFftSize = if (params.runTime) {
+      1.U << activeStageCount
+    } else {
+      params.fftSize.U
+    }
+    val activeLastSample = activeFftSize - 1.U
+    val outputLast       = outputFrameSampleCount === activeLastSample
+
+    when(cfgLoad) {
+      outputFrameSampleCount := 0.U
+    }.elsewhen(wrapperOutputFire) {
+      outputFrameSampleCount := Mux(outputLast, 0.U, outputFrameSampleCount + 1.U)
+    }
+
+    when(r_cfg_drain_pending && wrapperOutputFire && outputLast) {
+      r_apply_pending_cfg := true.B
+    }
   }
 
   private val fft: HasIO = params.sdfRadix match {
@@ -93,9 +180,9 @@ class FFT(val params: FFTParams) extends Module {
 
   private def connectRuntimeConfig(fft: HasIO): Unit = {
     fft.io.i_load_cfg.foreach(_ := cfgLoad)
-    if (params.runTime)      fft.io.i_size.get        := io.i_size.get
-    if (params.divBy2Reg)    fft.io.i_divBy2.get      := io.i_divBy2.get
-    if (params.directionReg) fft.io.i_fft_or_ifft.get := io.i_fft_or_ifft.get
+    if (params.runTime)      fft.io.i_size.get        := cfgSizeValue.get
+    if (params.divBy2Reg)    fft.io.i_divBy2.get      := cfgDivBy2Value.get
+    if (params.directionReg) fft.io.i_fft_or_ifft.get := cfgDirectionValue.get
   }
 
   private def connectOverflow(fft: HasIO): Unit = {
@@ -127,23 +214,33 @@ class FFT(val params: FFTParams) extends Module {
     }
 
     if (params.decimation == DIF) {
-      fft.io.in <> io.in
-      fft.io.i_last := io.i_last
+      fft.io.in.valid := Mux(wrapperDraining, true.B, io.in.valid)
+      fft.io.in.bits  := Mux(wrapperDraining, 0.U.asTypeOf(params.inDataType), io.in.bits)
+      fft.io.i_last   := Mux(wrapperDraining, false.B, io.i_last)
+      io.in.ready     := !wrapperDraining && fft.io.in.ready
 
       bitReverse.io.in <> fft.io.out
       bitReverse.io.i_last := fft.io.o_last
 
       io.out <> bitReverse.io.out
       io.o_last := bitReverse.io.o_last
+      wrapperOutputValid := io.out.valid
+      wrapperOutputFire  := io.out.fire
     } else {
-      bitReverse.io.in <> io.in
-      bitReverse.io.i_last := io.i_last
+      bitReverse.io.in.valid := !wrapperDraining && io.in.valid
+      bitReverse.io.in.bits  := io.in.bits
+      bitReverse.io.i_last   := io.i_last
+      io.in.ready            := !wrapperDraining && bitReverse.io.in.ready
 
-      fft.io.in <> bitReverse.io.out
-      fft.io.i_last := bitReverse.io.o_last
+      fft.io.in.valid        := Mux(wrapperDraining, true.B, bitReverse.io.out.valid)
+      fft.io.in.bits         := Mux(wrapperDraining, 0.U.asTypeOf(params.inDataType), bitReverse.io.out.bits)
+      fft.io.i_last          := Mux(wrapperDraining, false.B, bitReverse.io.o_last)
+      bitReverse.io.out.ready := !wrapperDraining && fft.io.in.ready
 
       io.out <> fft.io.out
       io.o_last := fft.io.o_last
+      wrapperOutputValid := io.out.valid
+      wrapperOutputFire  := io.out.fire
     }
   }
 }
