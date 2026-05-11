@@ -1,124 +1,76 @@
 package opera.fft
 
-import chisel3._
-import chisel3.util.log2Up
 import chiseltest.iotesters.PeekPokeTester
 import fixedpoint._
-import opera.common.SignalUtils
 
-import scala.util.Random
-
+/**
+ * Checks BitReverse ordering by sending several deterministic frames with periodic input/output stalls
+ * and comparing each accepted output sample against the shared bit-reversal helper.
+ */
 class BitReverseTester(
-  dut: BitReverse[FixedPoint],
-  params: BitReverseParams[FixedPoint],
-  sampleSize: Int,
-  verbose: Boolean = true,
-  random: Boolean = true,
-  
-) extends PeekPokeTester(dut) with SignalUtils {
+    dut      : BitReverse,
+    frameSize: Int,
+) extends PeekPokeTester(dut) {
+  require(frameSize > 1 && (frameSize & (frameSize - 1)) == 0, "frameSize must be a power of two")
+  require(frameSize <= dut.params.memDepth, "frameSize must fit within BitReverse memDepth")
 
-  // move this to trait and then use extends
-  /**
-    * Returns bit reversed index
-    */
-  def bit_reverse(in: Int, width: Int): Int = {
-    import scala.math.pow
-    var test = in
-    var out = 0
-    for (i <- 0 until width) {
-      if (test / pow(2, width - i - 1) >= 1) {
-        out += pow(2, i).toInt
-        test -= pow(2, width - i - 1).toInt
-      }
+  private val frames = Seq(
+    Seq.tabulate(frameSize)(i => BigInt(i)),
+    Seq.tabulate(frameSize)(i => BigInt(i + frameSize)),
+    Seq.tabulate(frameSize)(i => BigInt(i + 1)),
+    Seq.tabulate(frameSize)(i => BigInt(i + frameSize + 1)),
+  )
+  private val input = frames.flatten
+  private val expected = frames.flatMap(TestUtils.bitReverse)
+  private val maxCycles = 32 * dut.params.memDepth
+
+  dut.io.i_samples.foreach(samples => poke(samples, frameSize))
+  reset(2)
+  dut.io.i_samples.foreach(samples => poke(samples, frameSize))
+  poke(dut.io.in.valid, false)
+  poke(dut.io.i_last, false)
+  poke(dut.io.out.ready, false)
+  step(2)
+
+  var written = 0
+  var read = 0
+  var cycle = 0
+
+  while (read < expected.length && cycle < maxCycles) {
+    val driveInput = written < input.length && cycle % 5 != 1
+    val outputReady = cycle % 4 != 2
+
+    poke(dut.io.in.valid, driveInput)
+    poke(dut.io.out.ready, outputReady)
+    if (driveInput) {
+      val sample = input(written)
+      poke(dut.io.in.bits.real.asSInt, sample)
+      poke(dut.io.in.bits.imag.asSInt, sample)
+      poke(dut.io.i_last, (written % frameSize) == frameSize - 1)
+    } else {
+      poke(dut.io.i_last, false)
     }
-    out
-  }
 
-  /**
-    * Reordering data
-    */
-  def bitrevorder_data(testSignal: Seq[BigInt]): Seq[BigInt] = {
-    val seqLength = testSignal.size
-    val new_indices = (0 until seqLength).map(x => bit_reverse(x, log2Up(seqLength)))
-    new_indices.map(x => testSignal(x))
-  }
-
-
-  // Data widths
-  val inputWidth: Int = params.dataType.getWidth
-  // generate test array
-  val inData1: Seq[BigInt] = Seq.tabulate(sampleSize) { i => i }
-  val inData2: Seq[BigInt] = Seq.tabulate(sampleSize) { i => i + sampleSize}
-  val inData3: Seq[BigInt] = Seq.tabulate(sampleSize) { i => i + 1 }
-  val inData4: Seq[BigInt] = Seq.tabulate(sampleSize) { i => i + sampleSize + 1}
-
-  val input = inData1 ++ inData2 ++ inData3 ++ inData4//if (dut.params.bitReverseDir) bitrevorder_data(inData) else inData
-  val output = bitrevorder_data(inData1) ++
-               bitrevorder_data(inData2) ++
-               bitrevorder_data(inData3) ++
-               bitrevorder_data(inData4)
-
-  // Reset DeCoupled nodes
-  step(1)
-  poke(dut.io.in.valid, false.B)
-  poke(dut.io.out.ready, false.B)
-  step(1)
-
-  // Assert out.ready
-  poke(dut.io.out.ready, true.B)
-  step(1)
-
-  var read_counter = 0
-  var write_counter = 0
-  var peekedValue: BigInt = 0
-  var peekedLast: BigInt = false
-
-  // TODO: peek real / imag
-  while (read_counter < 4*sampleSize && write_counter < 8*sampleSize) {
-    // Randomize ready
-    if(peek(dut.io.in.valid) == 1) poke(dut.io.out.ready, if (random) scala.util.Random.nextInt(2) else 1)
-    poke(dut.io.in.valid, if (random) scala.util.Random.nextInt(2) else 1)
-    // Write input data
-    if (peek(dut.io.in.valid) == 1 && peek(dut.io.in.ready) == 1) {
-      poke(dut.io.in.bits.real.asSInt, input(write_counter % (4*sampleSize)))
-      poke(dut.io.in.bits.imag.asSInt, input(write_counter % (4*sampleSize)))
-      if (write_counter == sampleSize - 1) poke(dut.io.i_last, true.B) else poke(dut.io.i_last, false.B)
-      write_counter = write_counter + 1
+    if (driveInput && peek(dut.io.in.ready) == 1) {
+      written += 1
     }
-    // Check output data
-    if (peek(dut.io.out.valid) == 1 && peek(dut.io.out.ready) == 1) {
-      peekedValue = peek(dut.io.out.bits.real).head
-      peekedLast = peek(dut.io.o_last)
-      // Expected values
-      val expected = output(read_counter % (4*sampleSize))
-      val expectedLast = if (read_counter % sampleSize == sampleSize - 1) BigInt(1) else BigInt(0)
 
-      // Print if enabled
-      if (verbose) {
-        val in = input(read_counter % (4*sampleSize))
-        print(f"i: $read_counter%02d, ")
-        print(f"input data: $in%3d, ")
-        print(f"peeked data: ")
-        print(f"$peekedValue%3d, ")
-        print(f"expected data: $expected%3d.\n")
-      }
-      // Check results
-      require(
-        expected == peekedValue,
-        f"[0x$read_counter%04X] Expected and received data are different.\n" +
-          f"\texpected: $expected, " +
-          f"\treceived: $peekedValue\n"
-      )
-      require(
-        expectedLast == peekedLast,
-        f"[0x$read_counter%04X] Expected and received last signals are different.\n" +
-          f"\texpected: $expectedLast, " +
-          f"\treceived: $peekedLast\n"
-      )
-      read_counter = read_counter + 1
+    if (outputReady && peek(dut.io.out.valid) == 1) {
+      val actual = peek(dut.io.out.bits.real.asSInt)
+      val actualLast = peek(dut.io.o_last)
+      val expectedValue = expected(read)
+      val expectedLast = if (read % frameSize == frameSize - 1) BigInt(1) else BigInt(0)
+
+      assert(actual == expectedValue, s"BitReverse data mismatch at sample $read: expected=$expectedValue actual=$actual")
+      assert(actualLast == expectedLast, s"BitReverse last mismatch at sample $read: expected=$expectedLast actual=$actualLast")
+      read += 1
     }
+
+    cycle += 1
     step(1)
   }
-  step(5)
-}
 
+  assert(written == input.length, s"BitReverse accepted $written of ${input.length} input samples")
+  assert(read == expected.length, s"BitReverse produced $read of ${expected.length} output samples")
+  TestLog.log(s"BitReverse checked $read samples with frameSize=$frameSize")
+}
