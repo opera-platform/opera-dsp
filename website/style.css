@@ -8,9 +8,6 @@
   --text: #1c1917;
   --text-secondary: #78716c;
   --text-tertiary: #a8a29e;
-  --accent: #1c1917;
-  --accent-soft: #292524;
-  --accent-bg: #f5f5f4;
   --btn-bg: #1c1917;
   --btn-text: #ffffff;
   --btn-hover: #292524;
@@ -35,9 +32,6 @@
   --text: #e6edf3;
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
-  --accent: #e6edf3;
-  --accent-soft: #c9d1d9;
-  --accent-bg: #161b22;
   --btn-bg: #16a34a;
   --btn-text: #0d1117;
   --btn-hover: #15803d;
@@ -68,13 +62,12 @@
   border-color: var(--text-tertiary);
 }
 
-/* Shows light logo by default, dark logo when dark theme is active.
-   Uses !important to override inline display styles from components.js injection. */
-.logo-dark { display: none !important; }
-.logo-light { display: inline !important; }
+/* Shows light logo by default, dark logo when dark theme is active. */
+.logo-dark { display: none; }
+.logo-light { display: inline; }
 
-[data-theme="dark"] .logo-dark { display: inline !important; }
-[data-theme="dark"] .logo-light { display: none !important; }
+[data-theme="dark"] .logo-dark { display: inline; }
+[data-theme="dark"] .logo-light { display: none; }
 
 /* Theme toggle icons - shows moon icon (switch-to-dark) by default, sun icon in dark mode */
 .theme-toggle .icon-sun { display: none; }
@@ -158,12 +151,6 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
-  letter-spacing: -0.01em;
-}
-
-.logo-icon {
-  font-size: 1.2rem;
-  color: var(--text);
 }
 
 .nav-links {
@@ -190,12 +177,12 @@ button:focus-visible {
 }
 
 .nav-github {
-  display: flex !important;
+  display: flex;
   align-items: center;
   gap: 6px;
 }
 
-/* Button - hidden on desktop, shown on mobile */
+/* Mobile menu button */
 .nav-toggle {
   display: none;
   background: none;
@@ -256,7 +243,7 @@ button:focus-visible {
   .nav-toggle { display: flex; }
 }
 
-/* Hero, again, our "favorite" theme */
+/* Hero */
 
 .hero {
   max-width: 960px;
@@ -275,15 +262,12 @@ button:focus-visible {
   padding: 5px 14px;
   border-radius: 100px;
   margin-bottom: 28px;
-  letter-spacing: 0.02em;
 }
 
-.hero h1,
-.hero h2 {
-  font-size: clamp(2.2rem, 5vw, 3.4rem);
+.hero-tagline {
+  font-size: 3.2rem;
   font-weight: 700;
   line-height: 1.12;
-  letter-spacing: -0.035em;
   margin-bottom: 20px;
   color: var(--text);
 }
@@ -297,15 +281,6 @@ button:focus-visible {
 .hero-logo img {
   max-width: 100%;
   height: auto;
-}
-
-.hero-tagline {
-  font-size: clamp(1.4rem, 3vw, 2rem);
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-  margin-bottom: 20px;
-  color: var(--text-secondary);
 }
 
 .hero-accent {
@@ -379,7 +354,6 @@ button:focus-visible {
   font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--code-text);
-  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
@@ -394,7 +368,28 @@ button:focus-visible {
   flex-shrink: 0;
 }
 
-.copy-btn:hover { color: white; }
+.copy-btn:hover { color: var(--code-text); }
+
+@media (max-width: 640px) {
+  .hero {
+    padding: 56px 20px 48px;
+  }
+
+  .hero-tagline {
+    font-size: 2.15rem;
+  }
+
+  .hero-install {
+    width: 100%;
+    max-width: 360px;
+  }
+
+  .hero-install code {
+    white-space: normal;
+    word-break: break-word;
+    text-align: left;
+  }
+}
 
 /* Section Label */
 
@@ -402,7 +397,6 @@ button:focus-visible {
   font-size: 0.78rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--text-tertiary);
   margin-bottom: 32px;
   text-align: center;
@@ -450,7 +444,6 @@ button:focus-visible {
   font-size: 0.95rem;
   font-weight: 600;
   margin-bottom: 8px;
-  letter-spacing: -0.01em;
 }
 
 .feature-card p {
@@ -527,10 +520,7 @@ button:focus-visible {
   color: var(--code-text);
 }
 
-/* Syntax highlighting colors for code blocks */
-.kw { color: #c084fc; }   /* keywords */
-.str { color: #86efac; }  /* strings */
-.fn { color: #93c5fd; }   /* functions */
+/* Syntax highlighting color used by the hand-authored command examples. */
 .cm { color: #78716c; }   /* comments */
 
 /* Stack / Built With Section
@@ -566,7 +556,6 @@ button:focus-visible {
   font-size: 0.92rem;
   font-weight: 600;
   margin-bottom: 4px;
-  letter-spacing: -0.01em;
 }
 
 .stack-item span {
@@ -600,7 +589,6 @@ button:focus-visible {
 .cta h2 {
   font-size: 1.8rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
   margin-bottom: 10px;
 }
 
@@ -640,8 +628,6 @@ button:focus-visible {
   align-items: center;
   gap: 6px;
 }
-
-.footer-sep { opacity: 0.4; }
 
 .footer-right {
   display: flex;
@@ -685,7 +671,6 @@ button:focus-visible {
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--text-tertiary);
   margin-bottom: 10px;
 }
@@ -711,14 +696,12 @@ button:focus-visible {
 .docs-content h1 {
   font-size: 2rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
   margin-bottom: 12px;
 }
 
 .docs-content h2 {
   font-size: 1.3rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
   margin-top: 48px;
   margin-bottom: 16px;
   padding-top: 24px;
@@ -835,7 +818,6 @@ button:focus-visible {
 .news-page > h1 {
   font-size: 2rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
   margin-bottom: 8px;
 }
 
@@ -855,14 +837,12 @@ button:focus-visible {
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin-bottom: 8px;
 }
 
 .news-item h2 {
   font-size: 1.2rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
   margin-bottom: 8px;
 }
 

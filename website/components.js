@@ -10,11 +10,13 @@
     return;
   }
 
+  // Normalizes the current entry page for active navigation states.
   function getCurrentPage() {
     var path = window.location.pathname.split('/').pop();
     return path || 'index.html';
   }
 
+  // Small DOM helper for the shared shell.
   function createElement(tagName, className, text) {
     var element = document.createElement(tagName);
 
@@ -29,30 +31,35 @@
     return element;
   }
 
+  // Creates one themed logo image.
+  function createLogoImage(themeName, height) {
+    var image = createElement('img', 'logo-' + themeName);
+
+    image.src = 'images/logo-' + themeName + '.svg';
+    image.alt = 'OPERA-DSP';
+    image.height = height;
+
+    return image;
+  }
+
+  // Creates the home link used by the primary navigation.
   function createLogoLink(height) {
     var link = createElement('a', 'nav-logo');
-    var lightLogo = createElement('img', 'logo-light');
-    var darkLogo = createElement('img', 'logo-dark');
 
     link.href = 'index.html';
-    lightLogo.src = 'images/logo-light.svg';
-    lightLogo.alt = 'OPERA-DSP';
-    lightLogo.height = height;
-    darkLogo.src = 'images/logo-dark.svg';
-    darkLogo.alt = 'OPERA-DSP';
-    darkLogo.height = height;
-
-    link.appendChild(lightLogo);
-    link.appendChild(darkLogo);
+    link.appendChild(createLogoImage('light', height));
+    link.appendChild(createLogoImage('dark', height));
 
     return link;
   }
 
+  // Creates a theme toggle button that works in desktop and mobile navigation.
   function createThemeToggleButton() {
     var button = createElement('button', 'theme-toggle');
 
     button.type = 'button';
     button.setAttribute('aria-label', 'Toggle theme');
+    button.title = 'Toggle theme';
     button.innerHTML = themeIcons;
     button.addEventListener('click', function () {
       if (themeApi && typeof themeApi.toggleTheme === 'function') {
@@ -63,12 +70,14 @@
     return button;
   }
 
+  // Marks links that point to the current page.
   function applyLinkState(link, href) {
     if (href === currentPage) {
       link.setAttribute('aria-current', 'page');
     }
   }
 
+  // Creates an internal navigation link from site-config.js.
   function createPageLink(item) {
     var link = createElement('a', '', item.label);
 
@@ -78,12 +87,13 @@
     return link;
   }
 
+  // Creates the repeated GitHub link with consistent external-link attributes.
   function createGitHubLink(className, withIcon) {
     var link = createElement('a', className, withIcon ? null : 'GitHub');
 
     link.href = site.repoUrl;
     link.target = '_blank';
-    link.rel = 'noreferrer';
+    link.rel = 'noopener noreferrer';
 
     if (withIcon) {
       link.innerHTML = githubIcon + '<span>GitHub</span>';
@@ -92,6 +102,7 @@
     return link;
   }
 
+  // Assembles the full primary navigation and mobile menu.
   function renderNav() {
     var fragment = document.createDocumentFragment();
     var nav = createElement('nav', 'nav');
@@ -140,23 +151,15 @@
     return fragment;
   }
 
+  // Assembles the shared footer.
   function renderFooter() {
     var footer = createElement('footer', 'footer');
     var inner = createElement('div', 'footer-inner');
     var footerLeft = createElement('div', 'footer-left');
     var footerRight = createElement('div', 'footer-right');
-    var lightLogo = createElement('img', 'logo-light');
-    var darkLogo = createElement('img', 'logo-dark');
 
-    lightLogo.src = 'images/logo-light.svg';
-    lightLogo.alt = 'OPERA-DSP';
-    lightLogo.height = 18;
-    darkLogo.src = 'images/logo-dark.svg';
-    darkLogo.alt = 'OPERA-DSP';
-    darkLogo.height = 18;
-
-    footerLeft.appendChild(lightLogo);
-    footerLeft.appendChild(darkLogo);
+    footerLeft.appendChild(createLogoImage('light', 18));
+    footerLeft.appendChild(createLogoImage('dark', 18));
 
     site.navigation.forEach(function (item) {
       footerRight.appendChild(createPageLink(item));
@@ -170,6 +173,7 @@
     return footer;
   }
 
+  // Swaps a lightweight placeholder for rendered shared UI.
   function replacePlaceholder(placeholder, content) {
     if (!placeholder || !placeholder.parentNode) {
       return;
@@ -181,7 +185,9 @@
     placeholder.remove();
   }
 
+  // Wires mobile menu open/close behavior.
   function initMobileMenu(nav, toggle, mobileMenu) {
+    // Keeps the toggle button, menu visibility, and ARIA state in sync.
     function setMenuState(isOpen) {
       toggle.classList.toggle('active', isOpen);
       mobileMenu.classList.toggle('open', isOpen);

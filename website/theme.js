@@ -2,6 +2,7 @@
 (function () {
   var storageKey = 'theme';
 
+  // Reads the saved theme without failing when storage is blocked.
   function getStoredTheme() {
     try {
       return localStorage.getItem(storageKey);
@@ -10,6 +11,7 @@
     }
   }
 
+  // Uses an explicit saved choice first, then falls back to the OS preference.
   function getPreferredTheme() {
     var storedTheme = getStoredTheme();
 
@@ -25,10 +27,12 @@
     return 'light';
   }
 
+  // Applies the theme token switch before the page paints.
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
   }
 
+  // Toggles the current theme and persists the user's choice when possible.
   function toggleTheme() {
     var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -45,14 +49,8 @@
   }
 
   window.OPERA_THEME = {
-    applyTheme: applyTheme,
-    getTheme: function () {
-      return document.documentElement.getAttribute('data-theme') || 'light';
-    },
     toggleTheme: toggleTheme
   };
 
-  // Keep the legacy global available because the HTML is still plain static pages.
-  window.toggleTheme = toggleTheme;
   applyTheme(getPreferredTheme());
 })();
