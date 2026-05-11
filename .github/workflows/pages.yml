@@ -3,6 +3,12 @@ name: Build and Deploy GitHub Pages
 on:
   push:
     branches: ["main"]
+    paths:
+      - "docs/**"
+      - "website/**"
+      - "scripts/**"
+      - "Makefile"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
