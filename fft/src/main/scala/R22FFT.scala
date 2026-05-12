@@ -17,6 +17,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   private val cumulativeDelays = stageDelays.scanLeft(0)(_ + _)
   private val noOfTwiddles     = (noOfStages - 1) / 2
   private val stageCountWidth  = log2Ceil(noOfStages) + 1
+  private val fftSizeCountType = UInt(log2Ceil(params.fftSize + 1).W)
   private val stageRoleIndices = (0 until noOfStages).map(i => if (isItDIF) i else noOfStages - i - 1)
   private val staticStageOdd   = stageRoleIndices.map(i => (i & 1) == 1)
   private val stageHasTwiddleControl = (0 until noOfStages).map(i => if (isItDIF) i != noOfStages - 1 else i != 0)
@@ -53,8 +54,6 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   private val r_core_count = RegInit(0.U(log2Ceil(params.fftSize).W))
   private val r_initial_out_done = RegInit(false.B)
   private val r_out_count = RegInit(0.U(log2Ceil(params.fftSize).W))
-  private val r_in_prime_count = RegInit(0.U(log2Ceil(params.fftSize + 1).W))
-  private val r_pending_output_samples = RegInit(0.U(log2Ceil(params.fftSize + 2 * outputQueueReserve + 2).W))
 
   // Wires
   private val w_pair_mul_outputs =
@@ -85,7 +84,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   private val w_cfg_reset = reset.asBool || w_cfg_load
   private val w_active_stage_count = r_num_stages.getOrElse(noOfStages.U(stageCountWidth.W))
   private val w_first_active_stage = noOfStages.U - w_active_stage_count
-  private val w_active_fft_size = (if (params.runTime) 1.U << w_active_stage_count else params.fftSize.U).asTypeOf(r_in_prime_count)
+  private val w_active_fft_size = (if (params.runTime) 1.U << w_active_stage_count else params.fftSize.U).asTypeOf(fftSizeCountType)
   private val w_fft_or_ifft = r_fft_or_ifft.getOrElse(params.direction.B)
 
   if (params.runTime) {
@@ -314,9 +313,6 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   val w_final_stage_count = finalStage(w_stage_schedule.map(_.w_o_count))
   val w_last_sample = (w_active_fft_size - 1.U).asTypeOf(r_out_count)
   val w_last_stage_frame_done = w_final_stage_valid && (w_final_stage_count === w_last_sample)
-  val w_output_sample_release = w_in_fire && (r_in_prime_count === w_active_fft_size)
-  val w_drain_out_en = w_runtime_drain_pending && !w_runtime_apply_pending
-  val w_output_sample_allowed = w_drain_out_en || r_pending_output_samples =/= 0.U || w_output_sample_release
   val w_out_last = r_out_count === w_last_sample
   if (params.runTime) {
     w_drain_done.get := w_runtime_drain_pending && io.out.fire && w_out_last
@@ -330,7 +326,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   } else {
     finalStage(w_chain_outputs.map(Utils.resizeComplex(_, params.fftOutputType)))
   }).asUInt
-  outQueue.io.enq.valid := w_final_stage_valid && (r_initial_out_done || w_last_stage_frame_done) && !w_cfg_load && w_output_sample_allowed
+  outQueue.io.enq.valid := w_final_stage_valid && (r_initial_out_done || w_last_stage_frame_done) && !w_cfg_load
   outQueue.io.deq.ready := io.out.ready && !w_cfg_load
 
   val w_cfg_draining = w_runtime_drain_pending && !w_cfg_load
@@ -345,7 +341,6 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   Utils.assignFftOutputByDirection(outQueue.io.deq.bits.asTypeOf(params.fftOutputType), io.out.bits, w_fft_or_ifft)
   io.o_last := io.out.valid && w_out_last
 
-  val w_output_sample_queue = outQueue.io.enq.fire && !w_drain_out_en
   def updateFrameState(): Unit = {
     when(io.out.fire) {
       r_out_count := Mux(w_out_last, 0.U, r_out_count + 1.U)
@@ -354,17 +349,11 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
       r_core_count := Mux(r_core_count === w_last_sample, 0.U, r_core_count + 1.U)
     }
     r_initial_out_done := r_initial_out_done || w_last_stage_frame_done
-    when(w_in_fire && (r_in_prime_count =/= w_active_fft_size)) {
-      r_in_prime_count := r_in_prime_count + 1.U
-    }
-    when(w_output_sample_release =/= w_output_sample_queue) {
-      r_pending_output_samples := Mux(w_output_sample_release, r_pending_output_samples + 1.U, r_pending_output_samples - 1.U)
-    }
   }
 
   if (params.runTime) {
     when(w_cfg_load) {
-      Seq(r_out_count, r_in_prime_count, r_pending_output_samples, r_core_count).foreach(_ := 0.U)
+      Seq(r_out_count, r_core_count).foreach(_ := 0.U)
       r_initial_out_done := false.B
     }.otherwise {
       updateFrameState()
