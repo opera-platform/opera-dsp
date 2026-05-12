@@ -6,6 +6,7 @@ import dsptools._
 import dsptools.numbers.{Convergent, DspComplex}
 import fixedpoint._
 import org.scalatest.flatspec.AnyFlatSpec
+import ModelUtils.{FixedFormat, RawComplex}
 
 /**
  * SDFStageSpec defines the shared SDF stage test matrix.
@@ -15,9 +16,9 @@ import org.scalatest.flatspec.AnyFlatSpec
  *
  * @param stageName          Name shown in ScalaTest output.
  * @param strictPatternSeed  Seed used for strict overflow input patterns.
- * @tparam D                 DUT module type.
+ * @tparam DUT               DUT module type.
  */
-abstract class SDFStageSpec[D <: Module](
+abstract class SDFStageSpec[DUT <: Module](
     stageName        : String,
     strictPatternSeed: Long,
 ) extends AnyFlatSpec
@@ -29,20 +30,20 @@ abstract class SDFStageSpec[D <: Module](
   private val defaultDataWidth = 24
   private val defaultBinPoint = 14
 
-  protected def makeDut(params: RadixParams): D
-  protected def dutIO(dut: D): RadixIO
+  protected def makeDut(params: RadixParams): DUT
+  protected def dutIO(dut: DUT): RadixIO
   protected def makeModel(params: RadixParams): FFTStageModel = new FFTStageModel(params)
 
-  private type InputPatternFactory = (FFTStageModel.FixedFormat, Int) => Vector[FFTStageModel.RawComplex]
+  private type InputPatternFactory = (FixedFormat, Int) => Vector[RawComplex]
 
   private val safeCornerPattern: InputPatternFactory =
-    (format, stageSize) => SDFStageInputPatterns.safeCornerPattern(format, stageSize)
+    (format, stageSize) => InputPatterns.safeCornerPattern(format, stageSize)
   private val overflowCornerPattern: InputPatternFactory =
-    (format, stageSize) => SDFStageInputPatterns.overflowPattern(format, stageSize)
+    (format, stageSize) => InputPatterns.overflowPattern(format, stageSize)
   private val strictOverflowPattern: InputPatternFactory =
-    (format, stageSize) => SDFStageInputPatterns.strictPattern(format, stageSize, strictPatternSeed, frames = 2, includeOverflow = true)
+    (format, stageSize) => InputPatterns.strictPattern(format, stageSize, strictPatternSeed, frames = 2, includeOverflow = true)
   private val randomPattern: InputPatternFactory =
-    (format, stageSize) => SDFStageInputPatterns.seededPattern(format, stageSize, seed = 0x5eed2026L, frames = 4)
+    (format, stageSize) => InputPatterns.seededPattern(format, stageSize, seed = 0x5eed2026L, frames = 4)
 
   private case class SDFStageConfiguration(
       stageSize    : Int,

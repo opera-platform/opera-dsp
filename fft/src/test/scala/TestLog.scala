@@ -12,16 +12,16 @@ object TestLog {
     log(s"\n== $title ==")
 
   def printStageCompareRow(
-      cycle:           Int,
-      counter:         Int,
-      enable:          Boolean,
-      divBy2:          Boolean,
+      cycle          : Int,
+      counter        : Int,
+      enable         : Boolean,
+      divBy2         : Boolean,
       expectedRawReal: BigInt,
       expectedRawImag: BigInt,
       receivedRawReal: BigInt,
       receivedRawImag: BigInt,
-      expected:        Complex,
-      received:        Complex,
+      expected       : Complex,
+      received       : Complex,
   ): Unit =
     log(
       f"cycle=$cycle%4d counter=$counter%4d enable=$enable div2=$divBy2 " +

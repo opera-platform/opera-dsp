@@ -5,6 +5,7 @@ import chisel3.{Bits, Module}
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.misc.PeekPokeDspExtensions
 import dsptools.numbers._
+import ModelUtils.{FixedFormat, RawComplex}
 
 /**
  * Checks that an idle SDF stage does not advance counters or assert valid output while enable is low.
@@ -39,13 +40,13 @@ class SDFStageDutTester[DUT <: Module](
     params        : RadixParams,
     model         : FFTStageModel,
     debugName     : String,
-    inputPattern  : (FFTStageModel.FixedFormat, Int) => Vector[FFTStageModel.RawComplex],
+    inputPattern  : (FixedFormat, Int) => Vector[RawComplex],
     divBy2RegValue: Boolean = false,
     requireOverflowCoverage: Boolean = false,
     divBy2RegControl:        Option[Int => Boolean] = None,
 ) extends PeekPokeTester(dut)
     with PeekPokeDspExtensions {
-  import FFTStageModel.{RawComplex, StageTrace}
+  import FFTStageModel.StageTrace
 
   private val inputs = inputPattern(model.inputFormat, params.stageSize)
   require(inputs.nonEmpty, s"$debugName stage tester requires at least one input sample")
@@ -188,7 +189,6 @@ class SDFStageResetDutTester[DUT <: Module](
     debugName: String,
 ) extends PeekPokeTester(dut)
     with PeekPokeDspExtensions {
-  import FFTStageModel.RawComplex
 
   private val chirpsPerEpoch = 4
   private val resetEpochs = 3

@@ -21,7 +21,7 @@ class BitReverseTester(
     Seq.tabulate(frameSize)(i => BigInt(i + frameSize + 1)),
   )
   private val input = frames.flatten
-  private val expected = frames.flatMap(TestUtils.bitReverse)
+  private val expected = frames.flatMap(BitReverseUtils.bitReverse)
   private val maxCycles = 32 * dut.params.memDepth
 
   dut.io.i_samples.foreach(samples => poke(samples, frameSize))

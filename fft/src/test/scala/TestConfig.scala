@@ -1,6 +1,7 @@
 package opera.fft
 
 import chiseltest.{VerilatorBackendAnnotation, WriteVcdAnnotation}
+import chiseltest.simulator.VerilatorFlags
 import org.scalatest.{Args, Status, Suite}
 
 import java.io.File
@@ -36,6 +37,7 @@ object TestConfig {
   def verbose: Boolean = flag("verbose")
   def plot: Boolean = flag("plot")
   def annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+  def nonParallelVerilatorAnnotations = annotations :+ VerilatorFlags(Seq("--output-split", "0"))
 
   def plotDirectory: File = {
     val projectDir = if (new File("fft/src/test/scala").isDirectory) new File("fft") else new File(".")

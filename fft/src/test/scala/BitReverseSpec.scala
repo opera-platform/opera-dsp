@@ -40,25 +40,22 @@ class BitReverseSpec extends AnyFlatSpec with ChiselScalatestTester with TestCon
   // Checks bit-reversed output order by streaming deterministic frames through register and SRAM memory variants.
   configs.foreach { config =>
     val params = BitReverseParams(
-      dataType = DspComplex(FixedPoint(16.W, 14.BP)),
-      memDepth = config.memDepth,
-      runTime = config.runTime,
+      dataType      = DspComplex(FixedPoint(16.W, 14.BP)),
+      memDepth      = config.memDepth,
+      runTime       = config.runTime,
       singlePortMem = config.singlePortMem
     )
 
     it should TestUtils.passWhen(
-      "memDepth" -> config.memDepth,
-      "frameSize" -> config.frameSize,
-      "runTime" -> config.runTime,
+      "memDepth"      -> config.memDepth,
+      "frameSize"     -> config.frameSize,
+      "runTime"       -> config.runTime,
       "singlePortMem" -> config.singlePortMem,
     ) in {
       test(new BitReverse(params = params))
         .withAnnotations(annotations)
         .runPeekPoke(c =>
-          new BitReverseTester(
-            dut = c,
-            frameSize = config.frameSize
-          )
+          new BitReverseTester(dut = c, frameSize = config.frameSize)
         )
     }
   }
