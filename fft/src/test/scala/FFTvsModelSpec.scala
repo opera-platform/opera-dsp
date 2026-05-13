@@ -2,7 +2,6 @@ package opera.fft
 
 import chiseltest.ChiselScalatestTester
 import org.scalatest.flatspec.AnyFlatSpec
-import ModelUtils.RawComplex
 
 /**
  * Compares direct RTL FFT cores against the bit-accurate Scala FFT model.
@@ -48,32 +47,6 @@ class FFTvsModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestCon
       .map(pattern => FFTvsModelCase(radix, decimation, size, pattern))
   }
 
-  /**
-   * Builds deterministic raw DUT input for a direct FFT core.
-   *
-   * `FFTModel` and the direct RTL cores both operate in native SDF order. For DIT,
-   * the core input is therefore frame-wise bit-reversed before it is driven into
-   * the DUT. Tone phases and noise seeds are shifted per frame so repeated test
-   * frames remain deterministic but not identical.
-   *
-   * @param params  FFT parameters shared by DUT and model.
-   * @param pattern Natural-order frame pattern to generate.
-   * @param frames  Number of complete FFT frames to generate.
-   */
-  private def dutInput(params: FFTParams, pattern: InputPatterns.FftFramePattern, frames: Int): Vector[RawComplex] =
-    Vector
-      .tabulate(frames)(frameIndex => InputPatterns.fftFrame(params, framePattern(pattern, frameIndex)))
-      .flatMap { frame =>
-        if (params.decimation == DIT) BitReverseUtils.bitReverse(frame.toVector) else frame
-      }
-      .toVector
-
-  private def framePattern(pattern: InputPatterns.FftFramePattern, frameIndex: Int): InputPatterns.FftFramePattern =
-    pattern.copy(
-      tones = pattern.tones.map(tone => tone.copy(phaseRadians = tone.phaseRadians + frameIndex.toDouble * 0.37)),
-      noise = pattern.noise.map(noise => noise.copy(seed = noise.seed + frameIndex.toLong))
-    )
-
   private def annotationsFor(size: Int) = if (size >= 256) TestConfig.nonParallelVerilatorAnnotations else TestConfig.annotations
 
   configs.foreach { config =>
@@ -85,7 +58,7 @@ class FFTvsModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestCon
       "pattern"    -> config.pattern.label,
     ) in {
       val params = FFTModelTestUtils.fftParams(config.radix, config.size, config.decimation)
-      val input = dutInput(params, config.pattern, frames = 3)
+      val input = FFTModelTestUtils.patternedDutInput(params, config.pattern, frames = 3)
       val expected = FFTModel(params, input).checkedFrame(params.fftSize)
       val plotName = s"dut-vs-model-${config.radix.label}-${config.decimation}-${config.size}-${config.pattern.label}"
       val testAnnotations = annotationsFor(config.size)

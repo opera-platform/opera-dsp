@@ -36,10 +36,8 @@ abstract class SDFStageSpec[DUT <: Module](
 
   private type InputPatternFactory = (FixedFormat, Int) => Vector[RawComplex]
 
-  private val safeCornerPattern: InputPatternFactory =
-    (format, stageSize) => InputPatterns.safeCornerPattern(format, stageSize)
-  private val overflowCornerPattern: InputPatternFactory =
-    (format, stageSize) => InputPatterns.overflowPattern(format, stageSize)
+  private val safeCornerPattern: InputPatternFactory = InputPatterns.safeCornerPattern
+  private val overflowCornerPattern: InputPatternFactory = InputPatterns.overflowPattern
   private val strictOverflowPattern: InputPatternFactory =
     (format, stageSize) => InputPatterns.strictPattern(format, stageSize, strictPatternSeed, frames = 2, includeOverflow = true)
   private val randomPattern: InputPatternFactory =
@@ -194,23 +192,24 @@ abstract class SDFStageSpec[DUT <: Module](
 
   private def titleFields(config: SDFStageTestConfiguration): Seq[(String, Any)] = {
     val stage = config.stage
-    Seq(
-      "check"      -> config.check,
-      "stageSize"  -> stage.stageSize,
-      "decimation" -> stage.decimation,
-    ) ++ Seq(
-      Option.when(config.scenario.nonEmpty)("scenario" -> config.scenario),
-      Option.when(stage.addPipeRegs != 1)("addPipeRegs" -> stage.addPipeRegs),
-      Option.when(stage.mulPipeRegs != 1)("mulPipeRegs" -> stage.mulPipeRegs),
-      Option.when(!stage.growEnable)("growEnable" -> stage.growEnable),
-      Option.when(stage.divBy2)("divBy2" -> stage.divBy2),
-      Option.when(stage.divBy2Reg)("divBy2Reg" -> stage.divBy2Reg),
-      Option.when(stage.bufferAsMem)("bufferAsMem" -> stage.bufferAsMem),
-      Option.when(stage.bufferAsMem)("singlePortMem" -> stage.singlePortMem),
-      Option.when(stage.dataWidth != defaultDataWidth)("dataWidth" -> stage.dataWidth),
-      Option.when(stage.binPoint != defaultBinPoint)("binaryPoint" -> stage.binPoint),
-      Option.when(stage.trimType != Convergent)("trimType" -> stage.trimType),
-    ).flatten
+    TestUtils.titleFields(
+      Seq(
+        "check"      -> config.check,
+        "stageSize"  -> stage.stageSize,
+        "decimation" -> stage.decimation,
+      ),
+      config.scenario.nonEmpty            -> ("scenario" -> config.scenario),
+      (stage.addPipeRegs != 1)            -> ("addPipeRegs" -> stage.addPipeRegs),
+      (stage.mulPipeRegs != 1)            -> ("mulPipeRegs" -> stage.mulPipeRegs),
+      !stage.growEnable                   -> ("growEnable" -> stage.growEnable),
+      stage.divBy2                        -> ("divBy2" -> stage.divBy2),
+      stage.divBy2Reg                     -> ("divBy2Reg" -> stage.divBy2Reg),
+      stage.bufferAsMem                   -> ("bufferAsMem" -> stage.bufferAsMem),
+      stage.bufferAsMem                   -> ("singlePortMem" -> stage.singlePortMem),
+      (stage.dataWidth != defaultDataWidth) -> ("dataWidth" -> stage.dataWidth),
+      (stage.binPoint != defaultBinPoint)   -> ("binaryPoint" -> stage.binPoint),
+      (stage.trimType != Convergent)        -> ("trimType" -> stage.trimType),
+    )
   }
 
   // Checks the baseline stage by feeding deterministic random data and comparing every valid output to the scalar model.

@@ -4,7 +4,6 @@ import breeze.math.Complex
 import chisel3.{Bits, Module}
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.misc.PeekPokeDspExtensions
-import dsptools.numbers._
 import ModelUtils.{FixedFormat, RawComplex}
 
 /**

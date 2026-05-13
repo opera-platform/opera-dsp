@@ -10,12 +10,11 @@ import dsptools.numbers.{Convergent, DspComplex, Floor}
 import fixedpoint._
 
 import java.io.File
-import ModelUtils.{FixedFormat, RawComplex}
+import ModelUtils.RawComplex
 
 object FFTModelTestUtils {
   final case class ModelComparisonConfiguration(radix: SDFRadix, decimation: DecimationType, size: Int)
   final case class HighPrecisionConfiguration(radix: SDFRadix, decimation: DecimationType, size: Int, pattern: InputPatterns.FftFramePattern)
-  final case class RawBitFixture(input: Vector[RawComplex], expected: Vector[RawComplex], compareStart: Int)
 
   def fftParams(
       radix       : SDFRadix,
@@ -27,6 +26,10 @@ object FFTModelTestUtils {
       binPoint    : Int = 14,
       twiddleWidth: Int = 16,
       growEnable  : Seq[Boolean] = Seq.empty,
+      numAddPipes : Int = 1,
+      numMulPipes : Int = 1,
+      minSRAMdepth: Int = 0,
+      singlePortSRAM: Boolean = false,
   ): FFTParams = {
     val stages = log2Up(size)
     val stageTrims =
@@ -40,104 +43,53 @@ object FFTModelTestUtils {
       inDataType       = DspComplex(FixedPoint(dataWidth.W, binPoint.BP)),
       twiddleType      = DspComplex(FixedPoint(twiddleWidth.W, (twiddleWidth - 2).BP)),
       fftSize          = size,
-      numAddPipes      = 1,
-      numMulPipes      = 1,
+      numAddPipes      = numAddPipes,
+      numMulPipes      = numMulPipes,
       decimation       = decimation,
       trimType         = Convergent,
       stageTrimTypes   = stageTrims.toSeq,
       twiddleTrimTypes = twiddleTrims.toSeq,
       growEnable       = growEnable,
       sdfRadix         = radix,
-      use4Muls         = use4Muls
+      use4Muls         = use4Muls,
+      minSRAMdepth     = minSRAMdepth,
+      singlePortSRAM   = singlePortSRAM
     )
   }
 
   def deterministicInput(params: FFTParams, frames: Int, seed: Long, amplitudeRaw: Int = 64): Vector[RawComplex] =
     InputPatterns.deterministicFftFrames(params, seed, frames, amplitudeRaw = amplitudeRaw)
 
-  def highPrecisionFrame(
+  def shiftedFramePattern(pattern: InputPatterns.FftFramePattern, frameIndex: Int): InputPatterns.FftFramePattern =
+    pattern.copy(
+      tones = pattern.tones.map(tone => tone.copy(phaseRadians = tone.phaseRadians + frameIndex.toDouble * 0.37)),
+      noise = pattern.noise.map(noise => noise.copy(seed = noise.seed + frameIndex.toLong))
+    )
+
+  def dutInputFrame(params: FFTParams, frame: Vector[RawComplex]): Vector[RawComplex] =
+    if (params.decimation == DIT) BitReverseUtils.bitReverse(frame) else frame
+
+  def dutInputFrames(params: FFTParams, frames: Seq[Vector[RawComplex]]): Vector[RawComplex] =
+    frames.flatMap(frame => dutInputFrame(params, frame)).toVector
+
+  def patternedDutInput(
       params : FFTParams,
       pattern: InputPatterns.FftFramePattern,
+      frames : Int,
   ): Vector[RawComplex] =
-    InputPatterns.fftFrame(params, pattern)
+    dutInputFrames(
+      params,
+      Vector.tabulate(frames)(frameIndex => InputPatterns.fftFrame(params, shiftedFramePattern(pattern, frameIndex)))
+    )
 
   def repeatedDutInput(
       params: FFTParams,
       frame : Vector[RawComplex],
       frames: Int,
   ): Vector[RawComplex] = {
-    val dutFrame = if (params.decimation == DIT) BitReverseUtils.bitReverse(frame) else frame
+    val dutFrame = dutInputFrame(params, frame)
     Vector.fill(frames)(dutFrame).flatten
   }
-
-  def rawBitFixture(
-      params      : FFTParams,
-      seed        : Long,
-      amplitudeRaw: Int = 64,
-      frames      : Int = 3,
-      compareStart: Int = 0,
-  ): RawBitFixture = {
-    val frame = deterministicInput(params, frames = 1, seed = seed, amplitudeRaw = amplitudeRaw).take(params.fftSize)
-    val input = repeatedDutInput(params, frame, frames)
-    RawBitFixture(input, FFTModel(params, input).checkedFrame(params.fftSize), compareStart)
-  }
-
-  def wrapperRawBitFixture(params: FFTParams, seed: Long): RawBitFixture =
-    rawBitFixture(
-      params       = params,
-      seed         = seed,
-      amplitudeRaw = 32,
-    )
-
-  def bitReverseTopRawBitFixture(
-      params      : FFTParams,
-      seed        : Long,
-      amplitudeRaw: Int = 64,
-      frames      : Int = 5,
-  ): RawBitFixture = {
-    require(params.useBitReverse, "bit-reversal top fixture requires useBitReverse = true")
-
-    val frame        = deterministicInput(params, frames = 1, seed = seed, amplitudeRaw = amplitudeRaw).take(params.fftSize)
-    val topInput     = Vector.fill(frames)(frame).flatten
-    val coreParams   = params.copy(useBitReverse = false)
-    val coreInput    = if (params.decimation == DIT) BitReverseUtils.bitReverseFrameGroups(topInput, params.fftSize) else topInput
-    val coreOutput   = FFTModel(coreParams, coreInput).checkedFrame(params.fftSize)
-    val topOutput    = if (params.decimation == DIF) BitReverseUtils.bitReverseFrameGroups(coreOutput, params.fftSize) else coreOutput
-    val compareStart = 0
-
-    RawBitFixture(topInput, topOutput.drop(compareStart).take(params.fftSize), compareStart)
-  }
-
-  def overflowRawBitFixture(params: FFTParams, frames: Int = 4): RawBitFixture = {
-    val format       = FFTModel.inputFormat(params)
-    val frame        = Vector.fill(params.fftSize)(RawComplex(format.maxRaw, format.maxRaw))
-    val input        = repeatedDutInput(params, frame, frames)
-    val compareStart = 0
-    val model        = FFTModel(params, input)
-
-    require(model.anyOverflow, s"overflow fixture did not overflow for ${params.sdfRadix.label} ${params.decimation}")
-    RawBitFixture(input, model.checkedFrame(params.fftSize), compareStart)
-  }
-
-  def overflowParams(
-      radix       : SDFRadix = Radix2,
-      size        : Int = 4,
-      decimation  : DecimationType = DIF,
-      dataWidth   : Int = 8,
-      binPoint    : Int = 6,
-      twiddleWidth: Int = 8,
-  ): FFTParams =
-    fftParams(
-      radix        = radix,
-      size         = size,
-      decimation   = decimation,
-      dataWidth    = dataWidth,
-      binPoint     = binPoint,
-      twiddleWidth = twiddleWidth
-    ).copy(
-      divBy2 = Seq.fill(log2Up(size))(false),
-      overflowReg = true
-    )
 
   def floatingPointFrame(
       params: FFTParams,
@@ -175,20 +127,6 @@ object FFTModelTestUtils {
       )
     }
 
-    writeFloatingPointPlotIfEnabled(plotName, modelFft, expected)
+    PlotUtils.writePlotIfEnabled(plotName, modelFft, expected)
   }
-
-  private def writeFloatingPointPlotIfEnabled(name: String, model: Vector[Complex], floatingPoint: Vector[Complex]): Option[File] =
-    if (TestConfig.plot) {
-      val safeName = name.replace("^", "x").replaceAll("[^A-Za-z0-9_.-]", "-")
-      Some(PlotUtils.writePlot(
-        output = new File(TestConfig.plotDirectory, s"$safeName.png"),
-        title  = name,
-        model  = model,
-        breeze = floatingPoint
-      ))
-    } else {
-      None
-    }
-
 }

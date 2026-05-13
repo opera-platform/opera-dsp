@@ -2,15 +2,19 @@ package opera.fft
 
 import chiseltest.{VerilatorBackendAnnotation, WriteVcdAnnotation}
 import chiseltest.simulator.VerilatorFlags
-import org.scalatest.{Args, Status, Suite}
+import firrtl2.options.TargetDirAnnotation
+import org.scalatest.{Args, Outcome, Status, TestSuite, TestSuiteMixin}
 
 import java.io.File
 
 object TestConfig {
   @volatile private var scalaTestOptions: Map[String, String] = Map.empty
+  private val currentTestName = new ThreadLocal[String] {
+    override def initialValue(): String = "unknown-test"
+  }
 
   def configure(args: Args): Unit = {
-    scalaTestOptions = Seq("verbose", "plot").flatMap { name =>
+    scalaTestOptions = Seq("verbose", "plot", "randomReadyValid").flatMap { name =>
       keys(name).view
         .flatMap(key => args.configMap.get(key).map(_.toString))
         .headOption
@@ -36,18 +40,38 @@ object TestConfig {
 
   def verbose: Boolean = flag("verbose")
   def plot: Boolean = flag("plot")
-  def annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+  def randomReadyValid: Boolean = flag("randomReadyValid")
+  def annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation, TargetDirAnnotation(testDirectory.getPath))
   def nonParallelVerilatorAnnotations = annotations :+ VerilatorFlags(Seq("--output-split", "0"))
 
-  def plotDirectory: File = {
-    val projectDir = if (new File("fft/src/test/scala").isDirectory) new File("fft") else new File(".")
-    new File(projectDir, "target/plots")
+  def withTestName[T](name: String)(body: => T): T = {
+    val previous = currentTestName.get()
+    currentTestName.set(sanitizeTestName(name))
+    try {
+      body
+    } finally {
+      currentTestName.set(previous)
+    }
   }
+
+  def testDirectory: File = new File(projectDir, s"test_run_dir/${currentTestName.get()}")
+  def plotDirectory: File = testDirectory
+
+  private def projectDir: File =
+    if (new File("fft/src/test/scala").isDirectory) new File("fft") else new File(".")
+
+  private def sanitizeTestName(name: String): String =
+    name.replaceAll(" ", "_").replaceAll("\\W+", "")
 }
 
-trait TestConfigSupport extends Suite {
+trait TestConfigSupport extends TestSuiteMixin { this: TestSuite =>
   abstract override def run(testName: Option[String], args: Args): Status = {
     TestConfig.configure(args)
     super.run(testName, args)
   }
+
+  abstract override def withFixture(test: NoArgTest): Outcome =
+    TestConfig.withTestName(test.name) {
+      super.withFixture(test)
+    }
 }

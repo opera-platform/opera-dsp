@@ -1,7 +1,6 @@
 package opera.fft
 
 import chisel3._
-import chisel3.experimental._
 import chisel3.util.log2Up
 import chiseltest._
 import chiseltest.iotesters.PeekPokeTester

@@ -90,10 +90,7 @@ class FFTModelvsFloatingPointSpec extends AnyFlatSpec with TestConfigSupport {
           binPoint     = 28,
           twiddleWidth = 32
         )
-        val frame = FFTModelTestUtils.highPrecisionFrame(
-          params,
-          configuration.pattern
-        )
+        val frame     = InputPatterns.fftFrame(params, configuration.pattern)
         val outFormat = FFTModel.stageFormat(params, log2Up(configuration.size) - 1)
         val tol       = math.max(1.0e-6, 256.0 * math.pow(2.0, -outFormat.binaryPoint.toDouble))
         FFTModelTestUtils

@@ -5,7 +5,6 @@ import chisel3.Bits
 import chiseltest.iotesters.PeekPokeTester
 import dsptools.misc.PeekPokeDspExtensions
 import fixedpoint.FixedPoint
-import java.io.File
 import scala.collection.mutable.ArrayBuffer
 import ModelUtils.RawComplex
 
@@ -39,6 +38,7 @@ private final class FFTvsModelTester[DUT <: HasIO](
   private val inFormat      = FFTModel.inputFormat(params)
   private val outFormat     = FFTModel.fftOutputFormat(params)
   private val checkedActual = ArrayBuffer.empty[RawComplex]
+  private val handshakeRng  = new scala.util.Random(plotName.hashCode.toLong)
 
   /**
    * Converts one raw input sample into the real-valued representation expected by
@@ -61,23 +61,22 @@ private final class FFTvsModelTester[DUT <: HasIO](
    */
   private def expectedLast(index: Int): BigInt = if (index % params.fftSize == params.fftSize - 1) BigInt(1) else BigInt(0)
 
+  private def randomInputValid(hasInput: Boolean): Boolean =
+    hasInput && (!TestConfig.randomReadyValid || handshakeRng.nextDouble() < 0.8)
+
+  private def randomOutputReady: Boolean =
+    !TestConfig.randomReadyValid || handshakeRng.nextDouble() < 0.8
+
   /**
    * Writes a DUT-vs-model magnitude/error plot when plotting is enabled.
    */
   private def writePlotIfEnabled(): Unit =
-    if (TestConfig.plot) {
-      val safeName = plotName.replace("^", "x").replaceAll("[^A-Za-z0-9_.-]", "-")
+    if (checkedActual.nonEmpty) {
       val actual = checkedActual.toVector.map(ModelUtils.rawToComplex(outFormat, _))
       val model  = expected.take(checkedActual.length).map(ModelUtils.rawToComplex(outFormat, _))
-      val output = PlotUtils.writePlot(
-        output      = new File(TestConfig.plotDirectory, s"$safeName.png"),
-        title       = plotName,
-        model       = actual,
-        breeze      = model,
-        modelLabel  = "dut",
-        breezeLabel = "model"
-      )
-      println(s"wrote DUT-vs-model FFT plot to ${output.getAbsolutePath}")
+      PlotUtils
+        .writePlotIfEnabled(plotName, actual, model, modelLabel = "dut", breezeLabel = "model")
+        .foreach(output => println(s"wrote DUT-vs-model FFT plot to ${output.getAbsolutePath}"))
     }
 
   reset(2)
@@ -91,11 +90,13 @@ private final class FFTvsModelTester[DUT <: HasIO](
   var outputIndex = 0
   var cycle = 0
   val maxCycles = 64 * params.fftSize
+  val cycleLimit = if (TestConfig.randomReadyValid) maxCycles * 4 else maxCycles
 
-  while (outputIndex < expected.length && cycle < maxCycles) {
-    val driveInput = inputIndex < input.length
+  while (outputIndex < expected.length && cycle < cycleLimit) {
+    val driveInput = randomInputValid(inputIndex < input.length)
+    val outputReady = randomOutputReady
     poke(dut.io.in.valid, driveInput)
-    poke(dut.io.out.ready, true)
+    poke(dut.io.out.ready, outputReady)
 
     if (driveInput) {
       poke(dut.io.in.bits, toComplex(input(inputIndex)))
@@ -108,7 +109,7 @@ private final class FFTvsModelTester[DUT <: HasIO](
       inputIndex += 1
     }
 
-    if (peek(dut.io.out.valid) == 1) {
+    if (outputReady && peek(dut.io.out.valid) == 1) {
       val actual = peekOutputRaw()
       val actualLast = peek(dut.io.o_last)
       val expectedSample = expected(outputIndex)

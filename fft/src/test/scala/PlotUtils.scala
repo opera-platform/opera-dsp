@@ -17,6 +17,26 @@ object PlotUtils {
   private val TickFont = new Font("SansSerif", Font.PLAIN, 16)
   private val GridColor = new Color(220, 220, 220)
 
+  def writePlotIfEnabled(
+      name       : String,
+      model      : Seq[Complex],
+      breeze     : Seq[Complex],
+      modelLabel : String = "model",
+      breezeLabel: String = "floating-point",
+  ): Option[File] =
+    if (TestConfig.plot && model.nonEmpty) {
+      Some(writePlot(
+        output      = new File(TestConfig.plotDirectory, s"${TestUtils.safeFileStem(name)}.png"),
+        title       = name,
+        model       = model,
+        breeze      = breeze,
+        modelLabel  = modelLabel,
+        breezeLabel = breezeLabel
+      ))
+    } else {
+      None
+    }
+
   def writePlot(
       output     : File,
       title      : String,

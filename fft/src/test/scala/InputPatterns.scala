@@ -165,28 +165,6 @@ object InputPatterns {
   }
 
   /**
-   * Creates one single-tone FFT frame.
-   */
-  def singleToneFrame(
-      params          : FFTParams,
-      baseAmplitudeRaw: BigInt,
-      dc              : RawComplex = RawComplex(0, 0),
-      noise           : Option[FftNoise] = None,
-  ): Vector[RawComplex] =
-    fftFrame(params, singleTonePattern(params.fftSize, baseAmplitudeRaw, dc, noise))
-
-  /**
-   * Creates one multi-tone FFT frame.
-   */
-  def multiToneFrame(
-      params          : FFTParams,
-      baseAmplitudeRaw: BigInt,
-      dc              : RawComplex = RawComplex(0, 0),
-      noise           : Option[FftNoise] = None,
-  ): Vector[RawComplex] =
-    fftFrame(params, multiTonePattern(params.fftSize, baseAmplitudeRaw, dc, noise))
-
-  /**
    * Standard tone/noise FFT pattern family used by model and DUT comparison tests.
    */
   def standardFftPatterns(size: Int, baseAmplitudeRaw: BigInt, noiseSeed: Long): Vector[FftFramePattern] =

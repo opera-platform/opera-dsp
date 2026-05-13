@@ -1,7 +1,6 @@
 package opera.fft
 
 import chiseltest.iotesters.PeekPokeTester
-import fixedpoint._
 
 /**
  * Checks BitReverse ordering by sending several deterministic frames with periodic input/output stalls
