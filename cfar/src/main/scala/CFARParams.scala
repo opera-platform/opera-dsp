@@ -12,6 +12,15 @@ object CFARMode {
   val SmallestOf: Int = 2
 }
 
+object CFAREdgePolicy {
+  val SuppressEdges: Int = 0
+  val OneSidedAverage: Int = 1
+  val WrapAroundFrame: Int = 2
+
+  def isValid(policy: Int): Boolean =
+    policy >= SuppressEdges && policy <= WrapAroundFrame
+}
+
 object CFARTypeSupport {
   def requireSupportedParams[T <: Data: Real](params: CFARParams[T]): Unit = {
     requireSupportedType(params.inputType, "inputType")
@@ -44,6 +53,8 @@ case class CFARParams[T <: Data: Real](
   sendCut          : Boolean = true,
   logMode          : Boolean = false,
   runtimeLogMode   : Boolean = false,
+  edgePolicy       : Int = CFAREdgePolicy.OneSidedAverage,
+  runtimeEdgePolicy: Boolean = false,
   retiming         : Boolean = false,
   addPipeStages    : Int = 0,
   mulPipeStages    : Int = 0,
@@ -54,6 +65,7 @@ case class CFARParams[T <: Data: Real](
   require(maxReferenceCells > 0, "maxReferenceCells must be positive")
   require(maxGuardCells > 0, "maxGuardCells must be positive")
   require(maxReferenceCells > maxGuardCells, "maxReferenceCells must be greater than maxGuardCells")
+  require(CFAREdgePolicy.isValid(edgePolicy), s"edgePolicy must be a supported CFAREdgePolicy value, got $edgePolicy")
   require(addPipeStages >= 0, "addPipeStages must be non-negative")
   require(mulPipeStages >= 0, "mulPipeStages must be non-negative")
   require(minSRAMDepth >= 0, "minSRAMDepth must be non-negative")
@@ -75,6 +87,8 @@ object CFARParams {
     sendCut          : Boolean = true,
     logMode          : Boolean = false,
     runtimeLogMode   : Boolean = false,
+    edgePolicy       : Int = CFAREdgePolicy.OneSidedAverage,
+    runtimeEdgePolicy: Boolean = false,
     retiming         : Boolean = false,
     addPipeStages    : Int = 0,
     mulPipeStages    : Int = 0,
@@ -90,6 +104,8 @@ object CFARParams {
       sendCut = sendCut,
       logMode = logMode,
       runtimeLogMode = runtimeLogMode,
+      edgePolicy = edgePolicy,
+      runtimeEdgePolicy = runtimeEdgePolicy,
       retiming = retiming,
       addPipeStages = addPipeStages,
       mulPipeStages = mulPipeStages,

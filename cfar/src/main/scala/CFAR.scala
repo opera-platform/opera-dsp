@@ -8,6 +8,6 @@ class CFAR[T <: Data: Real: BinaryRepresentation](val params: CFARParams[T]) ext
 
   val io: CFARIO[T] = IO(CFARIO(params))
 
-  private val cellAveraging = Module(new CellAveragingCFAR(params))
-  cellAveraging.io <> io
+  private val cell_avg = Module(new CellAveragingCFAR(params))
+  cell_avg.io <> io
 }

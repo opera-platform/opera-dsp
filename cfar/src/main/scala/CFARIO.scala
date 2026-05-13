@@ -24,6 +24,7 @@ class CFARIO[T <: Data: Real](val params: CFARParams[T]) extends Bundle {
   val i_noise_div_shift: UInt = Input(UInt(log2Ceil(log2Ceil(params.maxReferenceCells + 1)).W))
   val i_peak_grouping: Bool = Input(Bool())
   val i_cfar_mode: UInt = Input(UInt(2.W))
+  val i_edge_policy: Option[UInt] = if (params.runtimeEdgePolicy) Some(Input(UInt(2.W))) else None
   val i_reference_cells: UInt = Input(UInt(log2Ceil(params.maxReferenceCells + 1).W))
   val i_guard_cells: UInt = Input(UInt(log2Ceil(params.maxGuardCells + 1).W))
 
