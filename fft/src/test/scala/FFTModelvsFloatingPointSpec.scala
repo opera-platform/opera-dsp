@@ -27,7 +27,7 @@ class FFTModelvsFloatingPointSpec extends AnyFlatSpec with TestConfigSupport {
     InputPatterns.standardFftPatterns(
       size,
       highPrecisionAmplitudeRaw,
-      noiseSeed = 0x2048L + size
+      noiseSeed = 0xC0FFEEL + size
     )
 
   // Checks model ordering and per-stage scaling by comparing deterministic frames against an independent floating-point FFT.

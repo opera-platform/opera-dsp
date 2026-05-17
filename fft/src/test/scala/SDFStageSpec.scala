@@ -41,7 +41,7 @@ abstract class SDFStageSpec[DUT <: Module](
   private val strictOverflowPattern: InputPatternFactory =
     (format, stageSize) => InputPatterns.strictPattern(format, stageSize, strictPatternSeed, frames = 2, includeOverflow = true)
   private val randomPattern: InputPatternFactory =
-    (format, stageSize) => InputPatterns.seededPattern(format, stageSize, seed = 0x5eed2026L, frames = 4)
+    (format, stageSize) => InputPatterns.seededPattern(format, stageSize, seed = 0xC0FFEEL, frames = 4)
 
   private case class SDFStageConfiguration(
       stageSize    : Int,

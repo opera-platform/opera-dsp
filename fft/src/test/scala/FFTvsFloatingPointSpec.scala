@@ -291,8 +291,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
     config.fft.growEnable.map(enabled => if (enabled) "1" else "0").mkString
 
   private def seed(config: FloatingPointCase): Long =
-    0x5eed1234L + 131L * config.fft.size + 17L * config.seedOffset + (if (config.fft.decimation == DIT) 1L else 0L)
+    0xC0FFEEL + 131L * config.fft.size + 17L * config.seedOffset + (if (config.fft.decimation == DIT) 1L else 0L)
 
-  private def annotationsFor(size: Int) =
-    if (size >= 512) TestConfig.nonParallelVerilatorAnnotations else TestConfig.annotations
+  private def annotationsFor(size: Int) = TestConfig.annotationsForFftSize(size)
 }

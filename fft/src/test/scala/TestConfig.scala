@@ -14,7 +14,7 @@ object TestConfig {
   }
 
   def configure(args: Args): Unit = {
-    scalaTestOptions = Seq("verbose", "plot", "randomReadyValid").flatMap { name =>
+    scalaTestOptions = Seq("verbose", "plot", "randomReadyValid", "nonParallel").flatMap { name =>
       keys(name).view
         .flatMap(key => args.configMap.get(key).map(_.toString))
         .headOption
@@ -32,17 +32,32 @@ object TestConfig {
     }
 
   private def flag(name: String): Boolean =
+    option(name)
+      .map(parseBoolean(name, _))
+      .getOrElse(false)
+
+  private def option(name: String): Option[String] =
     scalaTestOptions
       .get(name)
       .orElse(keys(name).view.flatMap(key => sys.props.get(key)).headOption)
-      .map(parseBoolean(name, _))
-      .getOrElse(false)
+
+  private def intOption(name: String): Option[Int] =
+    option(name).map { value =>
+      val parsed = value.toInt
+      require(parsed > 0, s"$name must be positive, got '$value'")
+      parsed
+    }
 
   def verbose: Boolean = flag("verbose")
   def plot: Boolean = flag("plot")
   def randomReadyValid: Boolean = flag("randomReadyValid")
   def annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation, TargetDirAnnotation(testDirectory.getPath))
   def nonParallelVerilatorAnnotations = annotations :+ VerilatorFlags(Seq("--output-split", "0"))
+  def annotationsForFftSize(size: Int) =
+    intOption("nonParallel") match {
+      case Some(threshold) if size >= threshold => nonParallelVerilatorAnnotations
+      case _                                    => annotations
+    }
 
   def withTestName[T](name: String)(body: => T): T = {
     val previous = currentTestName.get()

@@ -41,13 +41,13 @@ class FFTvsModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestCon
       .standardFftPatterns(
         size,
         dutAmplitudeRaw,
-        noiseSeed         = 0x51dfL + size + (if (decimation == DIT) 1 else 0),
+        noiseSeed         = 0xC0FFEEL + size + (if (decimation == DIT) 1 else 0),
         noiseAmplitudeRaw = dutNoiseAmplitudeRaw
       )
       .map(pattern => FFTvsModelCase(radix, decimation, size, pattern))
   }
 
-  private def annotationsFor(size: Int) = if (size >= 256) TestConfig.nonParallelVerilatorAnnotations else TestConfig.annotations
+  private def annotationsFor(size: Int) = TestConfig.annotationsForFftSize(size)
 
   configs.foreach { config =>
     it should TestUtils.passWhen(

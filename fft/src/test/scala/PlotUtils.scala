@@ -37,6 +37,36 @@ object PlotUtils {
       None
     }
 
+  def writeSqnrPlotIfEnabled(name: String, sqnrDb: Double): Option[File] =
+    if (TestConfig.plot) {
+      Some(writeSqnrPlot(
+        output = new File(TestConfig.plotDirectory, s"${TestUtils.safeFileStem(name)}.png"),
+        title = name,
+        sqnrDb = sqnrDb
+      ))
+    } else {
+      None
+    }
+
+  def writeSqnrPlot(output: File, title: String, sqnrDb: Double): File = {
+    Option(output.getParentFile).foreach(_.mkdirs())
+    val figure = Figure()
+    SwingUtilities.invokeAndWait { () =>
+      figure.visible = false
+      figure.width = ComparisonPlotWidth
+      figure.height = ComparisonPlotHeight / 2
+      val panel = figure.subplot(1, 1, 0)
+      panel += plot(DenseVector(Array(0.0, 1.0)), DenseVector(Array(sqnrDb, sqnrDb)), name = "SQNR")
+      panel.title = f"$title - SQNR $sqnrDb%.2f dB"
+      panel.xlabel = "measurement"
+      panel.ylabel = "SQNR (dB)"
+      panel.legend = true
+      formatPlot(panel)
+    }
+    saveHighResolution(figure, output)
+    output
+  }
+
   def writePlot(
       output     : File,
       title      : String,
