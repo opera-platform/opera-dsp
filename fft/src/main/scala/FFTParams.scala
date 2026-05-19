@@ -59,7 +59,7 @@ case object Radix22 extends SDFRadix {
  * @param twiddleTrimTypes   Optional per-stage trim mode for twiddle multipliers.
  */
 case class FFTParams(
-  fftSize:           Int = 2,
+  fftSize:           Int = 1024,
   twiddleType:       DspComplex[FixedPoint] = DspComplex(FixedPoint(16.W, 14.BP)),
   inDataType:        DspComplex[FixedPoint] = DspComplex(FixedPoint(16.W, 14.BP)),
   decimation:        DecimationType = DIF,
