@@ -1,9 +1,12 @@
 package opera.fft
 
 import chisel3._
+import chisel3.fromIntToWidth
 import dsptools._
 import dsptools.numbers._
 import fixedpoint._
+import freechips.rocketchip.diplomacy.AddressSet
+import play.api.libs.json.Json
 
 object Utils {
   /** Pipelined complex multiply with explicit DSP context settings and trim point from the input type. */
@@ -79,4 +82,91 @@ object Utils {
   def assignFftOutputByDirection(src: DspComplex[FixedPoint], dst: DspComplex[FixedPoint], fftOrIfft: Bool): Unit =
     when(fftOrIfft) { dst := src }
     .otherwise      { dst.real := src.imag; dst.imag := src.real }
+}
+
+object ParseParameters {
+  def parseconfig(filename: String): Either[(AddressSet, FFTParams, Int), Throwable] = {
+    try {
+      val resource = scala.io.Source.fromFile(filename)
+      val content = Json.parse(resource.getLines().mkString)
+
+      val address = AddressSet(
+        base = BigInt((content \ "address" \ "base").get.as[String].stripSuffix("L").drop(2), 16),
+        mask = BigInt((content \ "address" \ "mask").get.as[String].stripSuffix("L").drop(2), 16)
+      )
+
+      val parameters = content \ "parameters"
+      val fftParams = FFTParams(
+        fftSize = (parameters \ "fftSize").get.as[Int],
+        twiddleType = DspComplex(
+          FixedPoint(
+            (parameters \ "twiddleWidth").get.as[Int].W,
+            (parameters \ "twiddleBinPoint").get.as[Int].BP
+          )
+        ),
+        inDataType = DspComplex(
+          FixedPoint(
+            (parameters \ "inputWidth").get.as[Int].W,
+            (parameters \ "inputBinPoint").get.as[Int].BP
+          )
+        ),
+        decimation       = parseDecimation((parameters \ "decimation").get.as[String]),
+        sdfRadix         = parseSdfRadix((parameters \ "sdfRadix").get.as[String]),
+        growEnable       = (parameters \ "growEnable").get.as[Seq[Boolean]],
+        runTime          = (parameters \ "runTime").get.as[Boolean],
+        divBy2           = (parameters \ "divBy2").get.as[Seq[Boolean]],
+        divBy2Reg        = (parameters \ "divBy2Reg").get.as[Boolean],
+        overflowReg      = (parameters \ "overflowReg").get.as[Boolean],
+        trimType         = parseTrimType((parameters \ "trimType").get.as[String]),
+        numAddPipes      = (parameters \ "numAddPipes").get.as[Int],
+        numMulPipes      = (parameters \ "numMulPipes").get.as[Int],
+        direction        = (parameters \ "direction").get.as[Boolean],
+        directionReg     = (parameters \ "directionReg").get.as[Boolean],
+        use4Muls         = (parameters \ "use4Muls").get.as[Boolean],
+        useBitReverse    = (parameters \ "useBitReverse").get.as[Boolean],
+        minSRAMdepth     = (parameters \ "minSRAMdepth").get.as[Int],
+        singlePortSRAM   = (parameters \ "singlePortSRAM").get.as[Boolean],
+        stageTrimTypes   = (parameters \ "stageTrimTypes").get.as[Seq[String]].map(parseTrimType),
+        twiddleTrimTypes = (parameters \ "twiddleTrimTypes").get.as[Seq[String]].map(parseTrimType)
+      )
+      val beatBytes = (parameters \ "beatBytes").get.as[Int]
+
+      Left((address, fftParams, beatBytes))
+    } catch {
+      case e: Throwable => Right(e)
+    }
+  }
+
+  private def parseDecimation(value: String): DecimationType =
+    value match {
+      case "DIF" => DIF
+      case "DIT" => DIT
+      case other => throw new IllegalArgumentException(s"Unsupported FFT decimation type: $other")
+    }
+
+  private def parseSdfRadix(value: String): SDFRadix =
+    value match {
+      case "Radix2"  => Radix2
+      case "Radix22" => Radix22
+      case other     => throw new IllegalArgumentException(s"Unsupported FFT SDF radix: $other")
+    }
+
+  private def parseTrimType(value: String): TrimType =
+    value match {
+      case "Floor"                    => Floor
+      case "Ceiling"                  => Ceiling
+      case "Convergent"               => Convergent
+      case "Round"                    => Round
+      case "RoundDown"                => RoundDown
+      case "RoundUp"                  => RoundUp
+      case "RoundTowardsZero"         => RoundTowardsZero
+      case "RoundTowardsInfinity"     => RoundTowardsInfinity
+      case "RoundHalfDown"            => RoundHalfDown
+      case "RoundHalfUp"              => RoundHalfUp
+      case "RoundHalfTowardsZero"     => RoundHalfTowardsZero
+      case "RoundHalfTowardsInfinity" => RoundHalfTowardsInfinity
+      case "RoundHalfToEven"          => RoundHalfToEven
+      case "RoundHalfToOdd"           => RoundHalfToOdd
+      case other                      => throw new IllegalArgumentException(s"Unsupported FFT trim type: $other")
+    }
 }

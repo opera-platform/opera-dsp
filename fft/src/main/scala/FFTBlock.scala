@@ -1,19 +1,14 @@
 package opera.fft
 
 import chisel3._
-import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util.{circt => _, _}
-import circt.stage.{ChiselStage, FirtoolOption}
 import dspblocks._
-import dsptools.numbers.DspComplex
-import fixedpoint._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.regmapper._
 import freechips.rocketchip.resources._
 import freechips.rocketchip.tilelink._
-import opera.common.{AppLogger, StandaloneAXI4Block, StandaloneTLBlock}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.chipsalliance.diplomacy.nodes._
@@ -196,94 +191,4 @@ abstract class FFTBlock[D, U, E, O, B <: Data](
     // define abstract register map
     if (mapping.nonEmpty) regmap(mapping: _*)
   }
-}
-
-//TODO: Add json config.
-
-// AXI4 FFT block
-object FFTAXI4App extends App {
-  implicit val p: Parameters = Parameters.empty
-  private val beatBytes = 4
-  private val params = FFTParams(
-    inDataType = DspComplex(FixedPoint(16.W, 14.BP)),
-    twiddleType = DspComplex(FixedPoint(16.W, 14.BP)),
-    fftSize = 512,
-    sdfRadix = Radix22,
-    runTime = true,
-    divBy2Reg = true,
-    directionReg = true,
-    overflowReg = true,
-    numAddPipes = 1,
-    numMulPipes = 1,
-    useBitReverse = true,
-    minSRAMdepth = 8
-  )
-
-  private val FFTModule = LazyModule(
-    new FFTAXI4(AddressSet(0x500, 0xFF), params, beatBytes)
-      with StandaloneAXI4Block {
-      override def standaloneParams: AXI4BundleParameters =
-        AXI4BundleParameters(
-          addrBits = beatBytes*8,
-          dataBits = beatBytes*8,
-          idBits = 1
-        )
-      override def dataBytes: Int = math.ceil(params.inDataType.getWidth.toDouble / 8).toInt
-    }
-  )
-
-  (new ChiselStage).execute(
-    Array("--target", "systemverilog"),
-    Seq(ChiselGeneratorAnnotation(() => FFTModule.module),
-      FirtoolOption("--disable-all-randomization"),
-      FirtoolOption("--split-verilog"),
-      FirtoolOption("--o=./rtl/FFTAXI4"))
-  )
-}
-
-// TileLink FFT block
-object FFTTLApp extends App {
-  implicit val p: Parameters = Parameters.empty
-  private val beatBytes = 4
-  private val params = FFTParams(
-    inDataType = DspComplex(FixedPoint(16.W, 14.BP)),
-    twiddleType = DspComplex(FixedPoint(16.W, 14.BP)),
-    fftSize = 512,
-    sdfRadix = Radix22,
-    runTime = true,
-    divBy2Reg = true,
-    directionReg = true,
-    overflowReg = true,
-    numAddPipes = 1,
-    numMulPipes = 1,
-    useBitReverse = true,
-    minSRAMdepth = 8
-  )
-
-  private val FFTModule = LazyModule(
-    new FFTTL(AddressSet(0x500, 0xFF), params, beatBytes)
-      with StandaloneTLBlock {
-      override def standaloneParams: TLBundleParameters =
-        TLBundleParameters(
-          addressBits = beatBytes * 8,
-          dataBits = beatBytes * 8,
-          sourceBits = 4,
-          sinkBits = 1,
-          sizeBits = 2,
-          echoFields = Nil,
-          requestFields = Nil,
-          responseFields = Nil,
-          hasBCE = false
-        )
-      override def dataBytes: Int = math.ceil(params.inDataType.getWidth.toDouble / 8).toInt
-    }
-  )
-
-  (new ChiselStage).execute(
-    Array("--target", "systemverilog"),
-    Seq(ChiselGeneratorAnnotation(() => FFTModule.module),
-      FirtoolOption("--disable-all-randomization"),
-      FirtoolOption("--split-verilog"),
-      FirtoolOption("--o=./rtl/FFTTL"))
-  )
 }

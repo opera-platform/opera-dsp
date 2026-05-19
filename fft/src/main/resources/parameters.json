@@ -1,0 +1,32 @@
+{
+  "address": {
+    "base": "0x00000500",
+    "mask": "0x000000FF"
+  },
+  "parameters": {
+    "beatBytes"       : 4,
+    "fftSize"         : 1024,
+    "inputWidth"      : 16,
+    "inputBinPoint"   : 14,
+    "twiddleWidth"    : 16,
+    "twiddleBinPoint" : 14,
+    "decimation"      : "DIF",
+    "sdfRadix"        : "Radix22",
+    "growEnable"      : [],
+    "runTime"         : true,
+    "divBy2"          : [],
+    "divBy2Reg"       : true,
+    "overflowReg"     : true,
+    "trimType"        : "RoundHalfUp",
+    "numAddPipes"     : 1,
+    "numMulPipes"     : 1,
+    "direction"       : true,
+    "directionReg"    : true,
+    "use4Muls"        : false,
+    "useBitReverse"   : true,
+    "minSRAMdepth"    : 8,
+    "singlePortSRAM"  : false,
+    "stageTrimTypes"  : [],
+    "twiddleTrimTypes": []
+  }
+}
