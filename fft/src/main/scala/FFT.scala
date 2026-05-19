@@ -244,34 +244,3 @@ class FFT(val params: FFTParams) extends Module {
     }
   }
 }
-
-object FFTSimpleApp extends App {
-  val wordSize = 16
-  val binaryPoint = wordSize - 2
-  val fftSize = 512
-  val isBitReverse = true
-  val radix = Radix22
-
-  val params = FFTParams(
-    inDataType = DspComplex(FixedPoint(wordSize.W, binaryPoint.BP)),
-    twiddleType = DspComplex(FixedPoint(16.W, 14.BP)),
-    fftSize = fftSize,
-    decimation = DIF,
-    useBitReverse = isBitReverse,
-    numAddPipes = 1,
-    numMulPipes = 1,
-    sdfRadix = radix,
-    runTime = true,
-    minSRAMdepth = 8
-  )
-
-  (new ChiselStage).execute(
-    Array("--target", "systemverilog"),
-    Seq(
-      ChiselGeneratorAnnotation(() => new FFT(params)),
-      FirtoolOption("--disable-all-randomization"),
-      FirtoolOption("--split-verilog"),
-      FirtoolOption("--o=./rtl/FFT")
-    )
-  )
-}
