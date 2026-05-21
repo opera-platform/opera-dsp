@@ -20,19 +20,20 @@ import ModelUtils.{FixedFormat, RawComplex}
  */
 abstract class SDFStageSpec[DUT <: Module](
     stageName        : String,
+    sdfRadix         : SDFRadix,
     strictPatternSeed: Long,
 ) extends AnyFlatSpec
     with ChiselScalatestTester
     with TestConfigSupport {
   behavior of stageName
 
-  private def annotations = TestConfig.annotations
+  private def annotations      = TestConfig.annotations
   private val defaultDataWidth = 24
-  private val defaultBinPoint = 14
+  private val defaultBinPoint  = 14
 
   protected def makeDut(params: RadixParams): DUT
   protected def dutIO(dut: DUT): RadixIO
-  protected def makeModel(params: RadixParams): FFTStageModel = new FFTStageModel(params)
+  protected def makeModel(params: RadixParams): FFTStageModel = new FFTStageModel(params, Some(SDFStage.counterInit(params)))
 
   private type InputPatternFactory = (FixedFormat, Int) => Vector[RawComplex]
 
@@ -82,11 +83,13 @@ abstract class SDFStageSpec[DUT <: Module](
       divBy2RegControl       : Option[Int => Boolean] = None,
       idleOnly               : Boolean = false,
       resetOnly              : Boolean = false,
+      stallOnly              : Boolean = false,
   )
 
-  private val stageSizeSeq     = Seq(4, 8, 16)
-  private val decimationSeq    = Seq(DIF, DIT)
-  private val pipeRegsSeq      = Seq((0, 0), (1, 0), (0, 1), (1, 1), (2, 2))
+  private val stageSizeSeq  = Seq(4, 8, 16)
+  private val decimationSeq = Seq(DIF, DIT)
+  private val pipeRegsSeq   = Seq((0, 0), (1, 0), (0, 1), (1, 1), (2, 2))
+
   private val trimTypeSeq = Seq[TrimType](
     RoundDown,
     RoundUp,
@@ -102,16 +105,16 @@ abstract class SDFStageSpec[DUT <: Module](
   private val singlePortMemSeq = Seq(false, true)
 
   private val fixedPointFormatSeq = Seq(
-    StageFixedFormat(dataWidth = 8, binPoint = 4),
-    StageFixedFormat(dataWidth = 12, binPoint = 8),
+    StageFixedFormat(dataWidth = 8 , binPoint =  4),
+    StageFixedFormat(dataWidth = 12, binPoint =  8),
     StageFixedFormat(dataWidth = 16, binPoint = 10),
     StageFixedFormat(dataWidth = 16, binPoint = 14),
   )
 
   private val fixedPointScenarioSeq = Seq(
-    FixedPointScenario(name = "grow enabled", growEnable = true, useRandomPattern = true),
+    FixedPointScenario(name = "grow enabled"      , growEnable = true, useRandomPattern = true),
     FixedPointScenario(name = "static divide-by-2", growEnable = false, divBy2 = true, inputPattern = strictOverflowPattern, requireOverflowCoverage = true),
-    FixedPointScenario(name = "no divide-by-2", growEnable = false, inputPattern = strictOverflowPattern, requireOverflowCoverage = true),
+    FixedPointScenario(name = "no divide-by-2"    , growEnable = false, inputPattern = strictOverflowPattern, requireOverflowCoverage = true),
     FixedPointScenario(name = "overflow without divide-by-2", growEnable = false, inputPattern = overflowCornerPattern, requireOverflowCoverage = true),
     FixedPointScenario(
       name                    = "runtime divide-by-2",
@@ -125,7 +128,7 @@ abstract class SDFStageSpec[DUT <: Module](
   )
 
   private def stageParams(config: SDFStageConfiguration): RadixParams = {
-    val dataType = DspComplex(FixedPoint(config.dataWidth.W, config.binPoint.BP))
+    val dataType    = DspComplex(FixedPoint(config.dataWidth.W, config.binPoint.BP))
     val outDataType =
       if (config.growEnable) DspComplex(FixedPoint((config.dataWidth + 1).W, config.binPoint.BP)) else dataType
     RadixParams(
@@ -134,6 +137,7 @@ abstract class SDFStageSpec[DUT <: Module](
       twiddleType   = DspComplex(FixedPoint(16.W, 14.BP)),
       stageSize     = config.stageSize,
       decimation    = config.decimation,
+      sdfRadix      = sdfRadix,
       overflowReg   = true,
       divBy2Reg     = config.divBy2Reg,
       divBy2        = config.divBy2,
@@ -182,10 +186,27 @@ abstract class SDFStageSpec[DUT <: Module](
       .runPeekPoke(dut => new SDFStageResetDutTester(dut, dutIO(dut), params, makeModel(params), stageName))
   }
 
+  private def runStall(config: SDFStageTestConfiguration): Unit = {
+    val params = stageParams(config.stage)
+    test(makeDut(params))
+      .withAnnotations(annotations)
+      .runPeekPoke { dut =>
+        new SDFStageOutputStallDutTester(
+          dut,
+          dutIO(dut),
+          params,
+          makeModel(params),
+          stageName,
+          config.inputPattern,
+        )
+      }
+  }
+
   private def register(config: SDFStageTestConfiguration): Unit = {
     it should TestUtils.passWhen(titleFields(config): _*) in {
       if (config.idleOnly) runIdle(config.stage)
       else if (config.resetOnly) runReset(config.stage)
+      else if (config.stallOnly) runStall(config)
       else runStage(config)
     }
   }
@@ -198,17 +219,17 @@ abstract class SDFStageSpec[DUT <: Module](
         "stageSize"  -> stage.stageSize,
         "decimation" -> stage.decimation,
       ),
-      config.scenario.nonEmpty            -> ("scenario" -> config.scenario),
-      (stage.addPipeRegs != 1)            -> ("addPipeRegs" -> stage.addPipeRegs),
-      (stage.mulPipeRegs != 1)            -> ("mulPipeRegs" -> stage.mulPipeRegs),
-      !stage.growEnable                   -> ("growEnable" -> stage.growEnable),
-      stage.divBy2                        -> ("divBy2" -> stage.divBy2),
-      stage.divBy2Reg                     -> ("divBy2Reg" -> stage.divBy2Reg),
-      stage.bufferAsMem                   -> ("bufferAsMem" -> stage.bufferAsMem),
-      stage.bufferAsMem                   -> ("singlePortMem" -> stage.singlePortMem),
+      config.scenario.nonEmpty              -> ("scenario" -> config.scenario),
+      (stage.addPipeRegs != 1)              -> ("addPipeRegs" -> stage.addPipeRegs),
+      (stage.mulPipeRegs != 1)              -> ("mulPipeRegs" -> stage.mulPipeRegs),
+      !stage.growEnable                     -> ("growEnable" -> stage.growEnable),
+      stage.divBy2                          -> ("divBy2" -> stage.divBy2),
+      stage.divBy2Reg                       -> ("divBy2Reg" -> stage.divBy2Reg),
+      stage.bufferAsMem                     -> ("bufferAsMem" -> stage.bufferAsMem),
+      stage.bufferAsMem                     -> ("singlePortMem" -> stage.singlePortMem),
       (stage.dataWidth != defaultDataWidth) -> ("dataWidth" -> stage.dataWidth),
-      (stage.binPoint != defaultBinPoint)   -> ("binaryPoint" -> stage.binPoint),
-      (stage.trimType != Convergent)        -> ("trimType" -> stage.trimType),
+      (stage.binPoint  != defaultBinPoint)  -> ("binaryPoint" -> stage.binPoint),
+      (stage.trimType  != Convergent)       -> ("trimType" -> stage.trimType),
     )
   }
 
@@ -217,7 +238,7 @@ abstract class SDFStageSpec[DUT <: Module](
     stageSize  <- stageSizeSeq.iterator
     decimation <- decimationSeq.iterator
   } yield SDFStageTestConfiguration(
-    check = "stage model",
+    check = "match stage model",
     stage = SDFStageConfiguration(stageSize = stageSize, decimation = decimation),
     inputPattern = randomPattern,
   )
@@ -227,7 +248,7 @@ abstract class SDFStageSpec[DUT <: Module](
     (addPipeRegs, mulPipeRegs) <- pipeRegsSeq.iterator
     decimation                 <- decimationSeq.iterator
   } yield SDFStageTestConfiguration(
-    check = "pipeline alignment",
+    check = "match stage model with add/mul pipeline latency",
     stage = SDFStageConfiguration(stageSize = 8, decimation = decimation, addPipeRegs = addPipeRegs, mulPipeRegs = mulPipeRegs),
     inputPattern = randomPattern,
   )
@@ -247,7 +268,7 @@ abstract class SDFStageSpec[DUT <: Module](
     trimType   <- trimTypeSeq.iterator
     decimation <- decimationSeq.iterator
   } yield SDFStageTestConfiguration(
-    check = "non-default divide-by-2 trim type",
+    check = "apply non-default divide-by-2 trim type",
     stage = SDFStageConfiguration(stageSize = 8, decimation = decimation, growEnable = false, divBy2 = true, dataWidth = 12, binPoint = 8, trimType = trimType),
     inputPattern = strictOverflowPattern,
     requireOverflowCoverage = true,
@@ -261,7 +282,7 @@ abstract class SDFStageSpec[DUT <: Module](
   } yield {
     val inputPattern = if (scenario.useRandomPattern) randomPattern else scenario.inputPattern
     SDFStageTestConfiguration(
-      check = "bit-accurate fixed-point model",
+      check = "match fixed-point model across formats and scaling",
       stage = SDFStageConfiguration(
         stageSize  = 8,
         decimation = decimation,
@@ -271,9 +292,9 @@ abstract class SDFStageSpec[DUT <: Module](
         dataWidth  = format.dataWidth,
         binPoint   = format.binPoint,
       ),
-      scenario = scenario.name,
+      scenario       = scenario.name,
       divBy2RegValue = scenario.divBy2RegValue,
-      inputPattern = inputPattern,
+      inputPattern   = inputPattern,
       requireOverflowCoverage = scenario.requireOverflowCoverage,
       divBy2RegControl = scenario.divBy2RegControl,
     )
@@ -284,13 +305,13 @@ abstract class SDFStageSpec[DUT <: Module](
     decimation <- decimationSeq.iterator
     config <- Seq(
       SDFStageTestConfiguration(
-        check = "idle counter and output enable",
+        check = "hold counter and output valid while idle",
         stage = SDFStageConfiguration(stageSize = 8, decimation = decimation),
         inputPattern = safeCornerPattern,
         idleOnly = true,
       ),
       SDFStageTestConfiguration(
-        check = "divide-by-2 scaling",
+        check = "apply static divide-by-2 scaling",
         stage = SDFStageConfiguration(stageSize = 8, decimation = decimation, growEnable = false, divBy2 = true, binPoint = 8),
         inputPattern = strictOverflowPattern,
         requireOverflowCoverage = true,
@@ -304,25 +325,35 @@ abstract class SDFStageSpec[DUT <: Module](
         divBy2RegControl = Some(cycle => cycle % 4 == 0 || cycle % 4 == 1),
       ),
       SDFStageTestConfiguration(
-        check = "overflow asserted",
+        check = "assert overflow on overflowing input",
         stage = SDFStageConfiguration(stageSize = 8, decimation = decimation, growEnable = false, dataWidth = 5, binPoint = 1),
         inputPattern = overflowCornerPattern,
         requireOverflowCoverage = true,
       ),
       SDFStageTestConfiguration(
-        check = "overflow clear",
+        check = "keep overflow clear on safe input",
         stage = SDFStageConfiguration(stageSize = 8, decimation = decimation, growEnable = true, dataWidth = 4, binPoint = 1),
         inputPattern = safeCornerPattern,
       ),
     ).iterator
   } yield config
 
+  // Checks Decoupled output stalls at the stage boundary.
+  private val stallConfigs: Iterator[SDFStageTestConfiguration] = for {
+    decimation <- decimationSeq.iterator
+  } yield SDFStageTestConfiguration(
+    check = "hold output and backpressure input during output stall",
+    stage = SDFStageConfiguration(stageSize = 8, decimation = decimation),
+    inputPattern = randomPattern,
+    stallOnly = true,
+  )
+
   // Checks SRAM-backed delay with random data by forcing the stage delay buffer into single- and dual-port memory paths.
   private val sramConfigs: Iterator[SDFStageTestConfiguration] = for {
     decimation     <- decimationSeq.iterator
     singlePortMem  <- singlePortMemSeq.iterator
   } yield SDFStageTestConfiguration(
-    check = "SRAM-backed delay",
+    check = "match model with SRAM-backed delay buffer",
     stage = SDFStageConfiguration(stageSize = 16, decimation = decimation, bufferAsMem = true, singlePortMem = singlePortMem),
     inputPattern = randomPattern,
   )
@@ -332,13 +363,13 @@ abstract class SDFStageSpec[DUT <: Module](
     decimation <- decimationSeq.iterator
     config <- Seq(
       SDFStageTestConfiguration(
-        check = "stage reset between chirps",
+        check = "reset stage state between chirps",
         stage = SDFStageConfiguration(stageSize = 8, decimation = decimation, growEnable = true),
         inputPattern = safeCornerPattern,
         resetOnly = true,
       ),
       SDFStageTestConfiguration(
-        check = "SRAM-backed stage reset between chirps",
+        check = "reset SRAM-backed stage state between chirps",
         stage = SDFStageConfiguration(stageSize = 16, decimation = decimation, growEnable = true, bufferAsMem = true, singlePortMem = false),
         inputPattern = safeCornerPattern,
         resetOnly = true,
@@ -353,7 +384,7 @@ abstract class SDFStageSpec[DUT <: Module](
   } yield config
 
   private val configs: Iterator[SDFStageTestConfiguration] =
-    baselineConfigs ++ pipelineConfigs ++ seededConfigs ++ trimConfigs ++ fixedPointConfigs ++ controlConfigs ++ sramConfigs ++ resetConfigs
+    baselineConfigs ++ pipelineConfigs ++ seededConfigs ++ trimConfigs ++ fixedPointConfigs ++ controlConfigs ++ sramConfigs ++ resetConfigs ++ stallConfigs
 
   // Registers every stage matrix row as an independent ScalaTest case with shared DUT/model checking.
   configs.foreach { config =>

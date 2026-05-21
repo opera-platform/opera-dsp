@@ -60,7 +60,7 @@ abstract class MemoryMappedFFTSpec(
 
   staticCases.foreach { config =>
     it should passWhen(
-      "static multi-tone noise stream and last",
+      "stream static FFT frame and preserve last",
       "sdfRadix"   -> config.radix.label,
       "decimation" -> config.decimation,
       "size"       -> config.size
@@ -82,7 +82,7 @@ abstract class MemoryMappedFFTSpec(
 
   runtimeCases.foreach { config =>
     it should passWhen(
-      "runtime FFT CSR multi-tone noise control",
+      "apply runtime FFT CSR controls",
       "sdfRadix"   -> config.radix.label,
       "decimation" -> config.decimation,
       "maxSize"    -> config.size
@@ -97,7 +97,7 @@ abstract class MemoryMappedFFTSpec(
 
   overflowCases.foreach { config =>
     it should passWhen(
-      "sticky FFT overflow CSR status",
+      "report sticky FFT overflow CSR status",
       "sdfRadix"   -> config.radix.label,
       "decimation" -> config.decimation,
       "size"       -> config.size

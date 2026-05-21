@@ -40,7 +40,7 @@ class FFTModelvsFloatingPointSpec extends AnyFlatSpec with TestConfigSupport {
 
     configs.foreach { configuration =>
       it should TestUtils.passWhen(
-        "check"      -> "stay near FloatingPoint FFT",
+        "check"      -> "match floating-point FFT within fixed-point tolerance",
         "radix"      -> configuration.radix.label,
         "decimation" -> configuration.decimation,
         "size"       -> configuration.size
@@ -49,7 +49,7 @@ class FFTModelvsFloatingPointSpec extends AnyFlatSpec with TestConfigSupport {
         val frame  = FFTModelTestUtils.deterministicInput(
           params,
           frames = 1,
-          seed   = 0x5150L + configuration.size + (if (configuration.decimation == DIT) 1 else 0)
+          seed   = 0xC0FFEEL + configuration.size + (if (configuration.decimation == DIT) 1 else 0)
         ).take(configuration.size)
         val outFormat = FFTModel.stageFormat(params, log2Up(configuration.size) - 1)
         val tol       = math.max(0.02, 128.0 * math.pow(2.0, -outFormat.binaryPoint.toDouble))
@@ -76,7 +76,7 @@ class FFTModelvsFloatingPointSpec extends AnyFlatSpec with TestConfigSupport {
 
     configs.foreach { configuration =>
       it should TestUtils.passWhen(
-        "check"      -> "stay tightly near FloatingPoint FFT with high-precision FixedPoint",
+        "check"      -> "match floating-point FFT tightly with high-precision FixedPoint",
         "radix"      -> configuration.radix.label,
         "decimation" -> configuration.decimation,
         "size"       -> configuration.size,

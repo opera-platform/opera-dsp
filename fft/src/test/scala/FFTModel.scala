@@ -9,8 +9,7 @@ import ModelUtils.{FixedFormat, Pipe, RawComplex}
 /**
  * Pure Scala bit-accurate FixedPoint model for SDF FFT configurations.
  *
- * The model reuses the R2SDF and R22SDF stage
- * models, returns samples in DUT output order.
+ * The model reuses the shared SDF stage model and returns samples in DUT output order.
  */
 object FFTModel {
   /**
@@ -172,7 +171,7 @@ object FFTModel {
   }
 
   private def complexMulLatency(params: FFTParams): Int =
-    if (params.use4Muls) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
+    if (params.dspMul4) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
 
   private def runCycles(params: FFTParams, inputLength: Int): Int =
     inputLength + (params.numAddPipes + complexMulLatency(params)) * log2Ceil(params.fftSize) + params.fftSize + 64
@@ -180,15 +179,15 @@ object FFTModel {
   private def lowCounter(counter: Int, delay: Int): Int =
     if (delay == 1) 0 else counter & (delay - 1)
 
-  private final class ComplexPipe(format: FixedFormat, twFormat: FixedFormat, latency: Int, trimType: TrimType, use4Muls: Boolean) {
+  private final class ComplexPipe(format: FixedFormat, twFormat: FixedFormat, latency: Int, trimType: TrimType, dspMul4: Boolean) {
     private val zero = RawComplex(0, 0)
     private val pipe = new Pipe[RawComplex](latency, zero)
 
     def step(input: RawComplex, twiddle: RawComplex): RawComplex =
-      pipe.step(ModelUtils.complexMul(input, twiddle, format, twFormat, trimType, use4Muls))
+      pipe.step(ModelUtils.complexMul(input, twiddle, format, twFormat, trimType, dspMul4))
   }
 
-  private final class TwiddleOrBypass(format: FixedFormat, twFormat: FixedFormat, latency: Int, trimType: TrimType, use4Muls: Boolean) {
+  private final class TwiddleOrBypass(format: FixedFormat, twFormat: FixedFormat, latency: Int, trimType: TrimType, dspMul4: Boolean) {
     private val zero     = RawComplex(0, 0)
     private val passPipe = new Pipe[RawComplex](latency, zero)
     private val mulPipe  = new Pipe[RawComplex](latency, zero)
@@ -196,7 +195,7 @@ object FFTModel {
 
     def step(data: RawComplex, twiddle: RawComplex, twiddleEn: Boolean): RawComplex = {
       val pass = passPipe.step(data.map(format.wrap))
-      val mul  = mulPipe.step(ModelUtils.complexMul(data, twiddle, format, twFormat, trimType, use4Muls))
+      val mul  = mulPipe.step(ModelUtils.complexMul(data, twiddle, format, twFormat, trimType, dspMul4))
       val en   = enPipe.step(twiddleEn)
       if (en) mul else pass
     }
@@ -217,7 +216,7 @@ object FFTModel {
     }
     private val links = (0 until noOfStages).map { i =>
       val format = if (isDIF) stageOutputFormat(params, i) else stageInputFormat(params, i)
-      new TwiddleOrBypass(format, twFormat, latency, params.resolvedTwiddleTrimTypes(i), params.use4Muls)
+      new TwiddleOrBypass(format, twFormat, latency, params.resolvedTwiddleTrimTypes(i), params.dspMul4)
     }.toVector
     private val difTwiddlePipes = (0 until noOfStages).map(_ => new Pipe[RawComplex](params.numAddPipes, zero)).toVector
     private val difTwiddleEnPipes = (0 until noOfStages).map(_ => new Pipe[Boolean](params.numAddPipes, false)).toVector
@@ -289,6 +288,7 @@ object FFTModel {
         twiddleType   = params.twiddleType,
         stageSize     = stageSize,
         decimation    = params.decimation,
+        sdfRadix      = Radix2,
         overflowReg   = params.overflowReg,
         divBy2Reg     = false,
         divBy2        = params.stageDivBy2(index),
@@ -296,7 +296,7 @@ object FFTModel {
         latency       = latency,
         addPipeRegs   = params.numAddPipes,
         mulPipeRegs   = params.numMulPipes,
-        dspMul4       = params.use4Muls,
+        dspMul4       = params.dspMul4,
         delay         = delay,
         bufferAsMem   = false,
         singlePortMem = false,
@@ -333,7 +333,7 @@ object FFTModel {
     private val outputValidPipe = new Pipe[Boolean](stageLatency, false)
     private val mulPipes = (0 until noOfStages).map { i =>
       val format = if (isDIF) stageOutputFormat(params, i) else stageInputFormat(params, i)
-      new ComplexPipe(format, twFormat, latency, params.resolvedTwiddleTrimTypes(i), params.use4Muls)
+      new ComplexPipe(format, twFormat, latency, params.resolvedTwiddleTrimTypes(i), params.dspMul4)
     }.toVector
     private val tailPipe = new Pipe[RawComplex](latency, zero)
 
@@ -507,6 +507,7 @@ object FFTModel {
         twiddleType   = params.twiddleType,
         stageSize     = stageSize,
         decimation    = params.decimation,
+        sdfRadix      = Radix22,
         overflowReg   = params.overflowReg,
         divBy2Reg     = false,
         divBy2        = params.stageDivBy2(index),
@@ -514,7 +515,7 @@ object FFTModel {
         latency       = latency,
         addPipeRegs   = params.numAddPipes,
         mulPipeRegs   = params.numMulPipes,
-        dspMul4       = params.use4Muls,
+        dspMul4       = params.dspMul4,
         delay         = delay,
         bufferAsMem   = false,
         singlePortMem = false,

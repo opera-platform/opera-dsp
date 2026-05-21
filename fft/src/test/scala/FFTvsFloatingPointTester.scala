@@ -12,15 +12,15 @@ private[fft] sealed trait FloatingPointCheck {
 }
 
 private[fft] case object FirstValidOutputFrame extends FloatingPointCheck {
-  override val label: String = "first valid output frame"
+  override val label: String = "FFT first output frame matches floating-point"
 }
 
 private[fft] case object InitialStoring extends FloatingPointCheck {
-  override val label: String = "R22 initial store output frame"
+  override val label: String = "R22 initial-store frame matches floating-point under backpressure"
 }
 
 private[fft] case object MultipleAcceptedFrames extends FloatingPointCheck {
-  override val label: String = "multiple accepted frames produce output frames"
+  override val label: String = "FFT preserves multiple accepted frames"
 }
 
 private[fft] final class FFTvsFloatingPointTester(
@@ -34,7 +34,7 @@ private[fft] final class FFTvsFloatingPointTester(
 ) extends PeekPokeTester[FFT](dut)
     with PeekPokeDspExtensions {
 
-  private val inFormat       = FFTModel.inputFormat(params)
+  private val inFormat        = FFTModel.inputFormat(params)
   private val expectedSamples = ArrayBuffer.empty[Complex]
   private val actualSamples   = ArrayBuffer.empty[Complex]
   private val handshakeRng    = new scala.util.Random(plotName.hashCode.toLong)
@@ -81,57 +81,50 @@ private[fft] final class FFTvsFloatingPointTester(
     val maxCycles  = 80 * params.fftSize
 
     var firstFrameSample = 0
+    var outputSample = 0
+    var lastCount = 0
     var cycles = 0
 
-    poke(dut.io.out.ready, false)
-    poke(dut.io.in.valid, true)
+    def consumeOutput(outputReady: Boolean): Unit =
+      if (outputReady && peek(dut.io.out.valid) == 1) {
+        assert(outputSample < expected.length, s"unexpected extra initial-store output sample $outputSample")
+        val expectedLastSample = outputSample == params.fftSize - 1
+        checkOutput(outputSample, expected(outputSample), expectedLastSample, s"R22 initial-store o_last mismatch at output sample $outputSample")
+        if (expectedLastSample) {
+          lastCount += 1
+        }
+        outputSample += 1
+      }
+
     while (firstFrameSample < params.fftSize && cycles < maxCycles) {
-      pokeInputSample(inputFrame(firstFrameSample), firstFrameSample)
-      if (peek(dut.io.in.ready) == 1) {
+      val inputValid = randomInputValid(firstFrameSample < params.fftSize)
+      val outputReady = if (TestConfig.randomReadyValid) randomOutputReady else false
+      driveInput(inputValid, inputFrame, firstFrameSample)
+      poke(dut.io.out.ready, outputReady)
+
+      if (inputValid && peek(dut.io.in.ready) == 1) {
         firstFrameSample += 1
       }
+      consumeOutput(outputReady)
+
       cycles += 1
       step(1)
     }
     assert(firstFrameSample == params.fftSize, "R22 initial-store test did not fill the first input frame")
 
     var secondFrameSample = 0
-    var outputSample = 0
-    var lastCount = 0
-    poke(dut.io.out.ready, true)
 
     val cycleLimit = cycleLimitFor(maxCycles)
     while (outputSample < expected.length && cycles < cycleLimit) {
-      val driveInput = randomInputValid(secondFrameSample < params.fftSize)
+      val inputValid = randomInputValid(secondFrameSample < params.fftSize)
       val outputReady = randomOutputReady
-      poke(dut.io.in.valid, driveInput)
+      driveInput(inputValid, inputFrame, secondFrameSample)
       poke(dut.io.out.ready, outputReady)
-      if (driveInput) {
-        pokeInputSample(inputFrame(secondFrameSample), secondFrameSample)
-      } else {
-        poke(dut.io.i_last, false)
-      }
 
-      if (driveInput && peek(dut.io.in.ready) == 1) {
+      if (inputValid && peek(dut.io.in.ready) == 1) {
         secondFrameSample += 1
       }
-
-      if (outputReady && peek(dut.io.out.valid) == 1) {
-        val expectedSample = expected(outputSample)
-        val actual = peek(dut.io.out.bits)
-        compareData(outputSample, expectedSample, actual)
-        expectedSamples += expectedSample
-        actualSamples += actual
-        val expectedLastSample = outputSample == params.fftSize - 1
-        assert(
-          peek(dut.io.o_last) == expectedLast(expectedLastSample),
-          s"R22 initial-store o_last mismatch at output sample $outputSample"
-        )
-        if (expectedLastSample) {
-          lastCount += 1
-        }
-        outputSample += 1
-      }
+      consumeOutput(outputReady)
 
       cycles += 1
       step(1)
@@ -152,33 +145,18 @@ private[fft] final class FFTvsFloatingPointTester(
 
     val cycleLimit = cycleLimitFor(maxCycles)
     while (outputIndex < expected.length && cycles < cycleLimit) {
-      val driveInput = randomInputValid(inputIndex < input.length)
+      val inputValid = randomInputValid(inputIndex < input.length)
       val outputReady = randomOutputReady
-      poke(dut.io.in.valid, driveInput)
+      driveInput(inputValid, input, inputIndex)
       poke(dut.io.out.ready, outputReady)
 
-      if (driveInput) {
-        pokeInputSample(input(inputIndex), inputIndex)
-      } else {
-        poke(dut.io.i_last, false)
-      }
-
-      if (driveInput && peek(dut.io.in.ready) == 1) {
+      if (inputValid && peek(dut.io.in.ready) == 1) {
         inputIndex += 1
       }
 
       if (outputReady && peek(dut.io.out.valid) == 1) {
-        val expectedSample = expected(outputIndex)
-        val actual = peek(dut.io.out.bits)
-        compareData(outputIndex, expectedSample, actual)
-        expectedSamples += expectedSample
-        actualSamples += actual
-
         val expectedFrameLast = outputIndex % params.fftSize == params.fftSize - 1
-        assert(
-          peek(dut.io.o_last) == expectedLast(expectedFrameLast),
-          s"o_last mismatch at output sample $outputIndex"
-        )
+        checkOutput(outputIndex, expected(outputIndex), expectedFrameLast, s"o_last mismatch at output sample $outputIndex")
         if (expectedFrameLast) {
           lastCount += 1
         }
@@ -211,6 +189,11 @@ private[fft] final class FFTvsFloatingPointTester(
     poke(dut.io.i_last, sampleIndex % params.fftSize == params.fftSize - 1)
   }
 
+  private def driveInput(valid: Boolean, input: Vector[RawComplex], index: Int): Unit = {
+    poke(dut.io.in.valid, valid)
+    if (valid) pokeInputSample(input(index), index) else poke(dut.io.i_last, false)
+  }
+
   private def randomInputValid(hasInput: Boolean): Boolean =
     hasInput && (!TestConfig.randomReadyValid || handshakeRng.nextDouble() < 0.8)
 
@@ -232,6 +215,14 @@ private[fft] final class FFTvsFloatingPointTester(
       imagError <= tol,
       s"[imag sample=$index] expected=${expected.imag}, actual=${actual.imag}, error=$imagError, tol=$tol"
     )
+  }
+
+  private def checkOutput(index: Int, expectedSample: Complex, expectedLastSample: Boolean, lastMessage: String): Unit = {
+    val actual = peek(dut.io.out.bits)
+    compareData(index, expectedSample, actual)
+    expectedSamples += expectedSample
+    actualSamples += actual
+    assert(peek(dut.io.o_last) == expectedLast(expectedLastSample), lastMessage)
   }
 
   private def logCompareData(index: Int, expected: Complex, actual: Complex, realError: Double, imagError: Double): Unit =

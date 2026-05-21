@@ -69,16 +69,8 @@ object ModelUtils {
       case other => throw new IllegalArgumentException(s"FixedPoint model supports FixedPoint only, got ${other.getClass.getName}")
     }
 
-  def toRaw(format: FixedFormat, real: Double, imag: Double): RawComplex =
-    RawComplex(format.fromDouble(real), format.fromDouble(imag))
-
   def rawToComplex(format: FixedFormat, sample: RawComplex): Complex =
     Complex(format.toDouble(sample.real), format.toDouble(sample.imag))
-
-  def roundToRaw(format: FixedFormat, value: Double): BigInt = {
-    val scaled = BigDecimal.decimal(value) * BigDecimal(2).pow(format.binaryPoint)
-    format.wrap(scaled.setScale(0, BigDecimal.RoundingMode.HALF_UP).toBigIntExact.get)
-  }
 
   def roundToFittingRaw(format: FixedFormat, value: Double): BigInt = {
     val scaled = BigDecimal.decimal(value) * BigDecimal(2).pow(format.binaryPoint)
@@ -86,18 +78,6 @@ object ModelUtils {
     require(format.fits(rounded), s"literal $value raw=$rounded does not fit in $format")
     rounded
   }
-
-  def floorDiv2(raw: BigInt): BigInt =
-    floorDiv(raw, BigInt(2))
-
-  def ceilDiv2(raw: BigInt): BigInt =
-    ceilDiv(raw, BigInt(2))
-
-  def roundHalfToEvenDiv2(raw: BigInt): BigInt =
-    roundShift(raw, shift = 1, RoundHalfToEven, "ModelUtils")
-
-  def roundHalfToOddDiv2(raw: BigInt): BigInt =
-    roundShift(raw, shift = 1, RoundHalfToOdd, "ModelUtils")
 
   def roundShift(raw: BigInt, shift: Int, trimType: TrimType, owner: String = "ModelUtils"): BigInt = {
     require(shift >= 0, s"shift must be non-negative, got $shift")
@@ -155,7 +135,7 @@ object ModelUtils {
       inputFormat: FixedFormat,
       twFormat   : FixedFormat,
       trimType   : TrimType,
-      use4Muls   : Boolean = false,
+      dspMul4    : Boolean = false,
   ): RawComplex = {
     val outBp     = inputFormat.binaryPoint
     val productBp = inputFormat.binaryPoint.max(twFormat.binaryPoint) + 1
@@ -164,7 +144,7 @@ object ModelUtils {
       trimToBp(a * b, inputFormat.binaryPoint + twFormat.binaryPoint, productBp, trimType)
 
     val product =
-      if (use4Muls) {
+      if (dspMul4) {
         val ac = mul(input.real, twiddle.real)
         val bd = mul(input.imag, twiddle.imag)
         val ad = mul(input.real, twiddle.imag)

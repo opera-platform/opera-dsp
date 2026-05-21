@@ -16,26 +16,26 @@ import ModelUtils.{FixedFormat, RawComplex}
 class FFTModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestConfigSupport {
   behavior of "FFTModel"
 
-  private def annotations = TestConfig.annotations
-  private val radixSeq = Seq(Radix2, Radix22)
+  private def annotations   = TestConfig.annotations
+  private val radixSeq      = Seq(Radix2, Radix22)
   private val decimationSeq = Seq(DIF, DIT)
 
   private def fftParams(
-      radix:        SDFRadix,
-      size:         Int,
-      decimation:   DecimationType,
-      use4Muls:     Boolean = false,
-      dataWidth:    Int = 16,
-      binPoint:     Int = 14,
+      radix       : SDFRadix,
+      size        : Int,
+      decimation  : DecimationType,
+      dspMul4     : Boolean = false,
+      dataWidth   : Int = 16,
+      binPoint    : Int = 14,
       twiddleWidth: Int = 16,
   ): FFTParams =
     FFTModelTestUtils.fftParams(
-      radix = radix,
-      size = size,
-      decimation = decimation,
-      use4Muls = use4Muls,
-      dataWidth = dataWidth,
-      binPoint = binPoint,
+      radix        = radix,
+      size         = size,
+      decimation   = decimation,
+      dspMul4      = dspMul4,
+      dataWidth    = dataWidth,
+      binPoint     = binPoint,
       twiddleWidth = twiddleWidth
     )
 
@@ -50,7 +50,7 @@ class FFTModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestConfi
   }
 
   // Checks exact twiddle anchor points by generating quarter-cycle LUT entries for a large radix-2 table.
-  it should "generate exact unit-axis twiddles for large LUT sizes" in {
+  it should "generate exact radix-2 unit-axis twiddles" in {
     val params   = fftParams(Radix2, 1024, DIF)
     val twFormat = FFTModel.twiddleFormat(params)
     val one      = twFormat.fromDouble(1.0)
@@ -63,7 +63,7 @@ class FFTModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestConfi
   }
 
   // Checks hardware multiplier semantics by probing Utils.complexMul and comparing raw bits to the Scala model.
-  it should "match Utils.complexMul for representative raw samples" in {
+  it should "match hardware complex multiplier for representative raw samples" in {
     val params     = fftParams(Radix2, 16, DIF)
     val dataFormat = FFTModel.inputFormat(params)
     val twFormat   = FFTModel.twiddleFormat(params)
@@ -75,11 +75,11 @@ class FFTModelSpec extends AnyFlatSpec with ChiselScalatestTester with TestConfi
 
     test(new ComplexMulProbe(params, Convergent))
       .withAnnotations(annotations)
-      .runPeekPoke(new ComplexMulProbeTester(_, dataFormat, twFormat, Convergent, params.use4Muls, samples))
+      .runPeekPoke(new ComplexMulProbeTester(_, dataFormat, twFormat, Convergent, params.dspMul4, samples))
   }
 
   // Checks that the full FFT model reports per-stage overflow vectors while preserving sample output behavior.
-  it should "report full-model overflow by cycle and stage" in {
+  it should "report FFT model overflow by cycle and stage" in {
     val configs = for {
       radix      <- radixSeq
       decimation <- decimationSeq
@@ -149,7 +149,7 @@ private final class ComplexMulProbe(params: FFTParams, trimType: TrimType) exten
     params.numAddPipes,
     params.numMulPipes,
     trimType,
-    params.use4Muls
+    params.dspMul4
   )
   io.outReal := out.real.asSInt
   io.outImag := out.imag.asSInt
@@ -162,7 +162,7 @@ private final class ComplexMulProbe(params: FFTParams, trimType: TrimType) exten
  * @param format   FixedPoint format of input and output samples.
  * @param twFormat FixedPoint format of twiddle coefficients.
  * @param trimType Rounding or truncation mode used by the multiplier.
- * @param use4Muls If `true`, checks the four-real-multiply implementation.
+ * @param dspMul4  If `true`, checks the four-real-multiply implementation.
  * @param samples  Input and twiddle sample pairs to verify.
  */
 private final class ComplexMulProbeTester(
@@ -170,7 +170,7 @@ private final class ComplexMulProbeTester(
     format  : FixedFormat,
     twFormat: FixedFormat,
     trimType: TrimType,
-    use4Muls: Boolean,
+    dspMul4 : Boolean,
     samples : Seq[(RawComplex, RawComplex)],
 ) extends PeekPokeTester(dut) {
   reset(2)
@@ -180,7 +180,7 @@ private final class ComplexMulProbeTester(
     poke(dut.io.twReal, twiddle.real)
     poke(dut.io.twImag, twiddle.imag)
     step(6)
-    val expected = ModelUtils.complexMul(input, twiddle, format, twFormat, trimType, use4Muls)
+    val expected = ModelUtils.complexMul(input, twiddle, format, twFormat, trimType, dspMul4)
     val actual = RawComplex(format.wrap(peek(dut.io.outReal)), format.wrap(peek(dut.io.outImag)))
     assert(actual == expected, s"complexMul mismatch input=$input twiddle=$twiddle expected=$expected actual=$actual")
   }

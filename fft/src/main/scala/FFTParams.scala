@@ -30,7 +30,7 @@ case object Radix22 extends SDFRadix {
 /**
  * Parameters for configuring the streaming SDF FFT hardware.
  *
- * The public FFT input stream uses [[inDataType]]. The public FFT output stream is sized by
+ * The FFT input stream uses [[inDataType]]. The FFT output stream is sized by
  * [[fftOutputType]]. Stage boundary data types are derived from [[inDataType]] and
  * [[growEnable]]: boundary `i` is stage `i` input, and boundary `i + 1` is stage `i` output.
  *

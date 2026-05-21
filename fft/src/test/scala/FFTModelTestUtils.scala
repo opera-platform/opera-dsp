@@ -18,17 +18,17 @@ object FFTModelTestUtils {
 
   def fftParams(
       radix       : SDFRadix,
-      size        : Int,
-      decimation  : DecimationType,
-      use4Muls    : Boolean = false,
-      mixedTrim   : Boolean = false,
-      dataWidth   : Int = 16,
-      binPoint    : Int = 14,
-      twiddleWidth: Int = 16,
-      growEnable  : Seq[Boolean] = Seq.empty,
-      numAddPipes : Int = 1,
-      numMulPipes : Int = 1,
-      minSRAMdepth: Int = 0,
+      size            : Int,
+      decimation    : DecimationType,
+      dspMul4       : Boolean = false,
+      mixedTrim     : Boolean = false,
+      dataWidth     : Int = 16,
+      binPoint      : Int = 14,
+      twiddleWidth  : Int = 16,
+      growEnable    : Seq[Boolean] = Seq.empty,
+      numAddPipes   : Int = 1,
+      numMulPipes   : Int = 1,
+      minSRAMdepth  : Int = 0,
       singlePortSRAM: Boolean = false,
   ): FFTParams = {
     val stages = log2Up(size)
@@ -51,7 +51,7 @@ object FFTModelTestUtils {
       twiddleTrimTypes = twiddleTrims.toSeq,
       growEnable       = growEnable,
       sdfRadix         = radix,
-      use4Muls         = use4Muls,
+      dspMul4          = dspMul4,
       minSRAMdepth     = minSRAMdepth,
       singlePortSRAM   = singlePortSRAM
     )

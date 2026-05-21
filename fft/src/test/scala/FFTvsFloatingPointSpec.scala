@@ -5,24 +5,24 @@ import chiseltest.ChiselScalatestTester
 import org.scalatest.flatspec.AnyFlatSpec
 
 private final case class FFTDutConfiguration(
-    size:           Int,
-    decimation:     DecimationType,
-    addPipeRegs:    Int = 1,
-    mulPipeRegs:    Int = 1,
-    use4Muls:       Boolean = false,
-    minSRAMdepth:   Int = 0,
+    size          : Int,
+    decimation    : DecimationType,
+    addPipeRegs   : Int = 1,
+    mulPipeRegs   : Int = 1,
+    dspMul4       : Boolean = false,
+    minSRAMdepth  : Int = 0,
     singlePortSRAM: Boolean = false,
-    growEnable:     Seq[Boolean] = Seq.empty,
+    growEnable    : Seq[Boolean] = Seq.empty,
 )
 
 private final case class FloatingPointCase(
-    radix:       SDFRadix,
-    check:       FloatingPointCheck,
-    fft:         FFTDutConfiguration,
-    name:        String = "",
-    seedOffset:  Int = 0,
+    radix      : SDFRadix,
+    check      : FloatingPointCheck,
+    fft        : FFTDutConfiguration,
+    name       : String = "",
+    seedOffset : Int = 0,
     inputFrames: Int = 2,
-    growName:    String = "",
+    growName   : String = "",
 )
 
 private final case class StageGrowthPattern(name: String, seedOffset: Int, grow: Int => Seq[Boolean])
@@ -32,45 +32,45 @@ private final case class RadixFloatingPointMatrix(
     check                : FloatingPointCheck,
     sizes                : Seq[Int],
     multipleFrameSizes   : Seq[Int],
-    use4MulsSizes        : Seq[Int],
+    dspMul4Sizes         : Seq[Int],
     minSRAMdepth         : Int,
     multipleFrameSeedBase: Int,
     includeSelectedSignal: Boolean = false,
 )
 
 /**
- * Compares the public streaming FFT wrapper against an independent floating-point FFT reference.
+ * Compares the FFT streaming wrapper against an independent floating-point FFT reference.
  */
 class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with TestConfigSupport {
   behavior of "FFT vs FloatingPoint"
 
   private val decimationSeq: Seq[DecimationType] = Seq(DIF, DIT)
 
-  private val r2SizeSeq: Seq[Int] = Seq(2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
-  private val r2MultipleFrameCheckSizeSeq: Seq[Int] = Seq(64, 128, 512, 1024)
-  private val multipleFrameInputCountSeq: Seq[Int] = Seq(2, 3, 4)
-  private val r2Use4MulsSizeSeq: Seq[Int] = Seq(128, 256)
-  private val pipeRegsSeq: Seq[(Int, Int)] = Seq((1, 0), (0, 1), (1, 1), (2, 2))
-  private val singlePortSRAMSeq: Seq[Boolean] = Seq(true, false)
+  private val r2SizeSeq: Seq[Int]                    = Seq(2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
+  private val r2MultipleFrameCheckSizeSeq: Seq[Int]  = Seq(64, 128, 512, 1024)
+  private val multipleFrameInputCountSeq: Seq[Int]   = Seq(2, 3, 4)
+  private val r2DspMul4SizeSeq: Seq[Int]             = Seq(128, 256)
+  private val pipeRegsSeq: Seq[(Int, Int)]           = Seq((1, 0), (0, 1), (1, 1), (2, 2))
+  private val singlePortSRAMSeq: Seq[Boolean]        = Seq(true, false)
 
-  private val r22SizeSeq: Seq[Int] = Seq(4, 16, 64, 256, 1024)
+  private val r22SizeSeq: Seq[Int]                   = Seq(4, 16, 64, 256, 1024)
   private val r22MultipleFrameCheckSizeSeq: Seq[Int] = Seq(256, 1024)
-  private val r22Use4MulsSizeSeq: Seq[Int] = Seq(64, 256)
+  private val r22DspMul4SizeSeq: Seq[Int]            = Seq(64, 256)
 
   private val stageGrowthSizeSeq: Seq[Int] = Seq(64, 1024)
   private val stageGrowthPatternSeq: Seq[StageGrowthPattern] = Seq(
-    StageGrowthPattern("all stages grow", seedOffset = 0, stages => Seq.fill(stages)(true)),
+    StageGrowthPattern("all stages grow"           , seedOffset = 0, stages => Seq.fill(stages)(true)),
     StageGrowthPattern("first and last stages grow", seedOffset = 1, stages => Seq.tabulate(stages)(stage => stage == 0 || stage == stages - 1)),
-    StageGrowthPattern("even stages grow", seedOffset = 2, stages => Seq.tabulate(stages)(stage => (stage & 1) == 0)),
-    StageGrowthPattern("odd stages grow", seedOffset = 3, stages => Seq.tabulate(stages)(stage => (stage & 1) == 1)),
+    StageGrowthPattern("even stages grow"          , seedOffset = 2, stages => Seq.tabulate(stages)(stage => (stage & 1) == 0)),
+    StageGrowthPattern("odd stages grow"           , seedOffset = 3, stages => Seq.tabulate(stages)(stage => (stage & 1) == 1)),
   )
 
   private val dutAmplitudeRaw = BigInt(256)
   private val dutNoiseAmplitudeRaw = 32
 
   private val radixMatrices = Seq(
-    RadixFloatingPointMatrix(Radix2, FirstValidOutputFrame, r2SizeSeq, r2MultipleFrameCheckSizeSeq, r2Use4MulsSizeSeq, 8, 80),
-    RadixFloatingPointMatrix(Radix22, InitialStoring, r22SizeSeq, r22MultipleFrameCheckSizeSeq, r22Use4MulsSizeSeq, 16, 90, includeSelectedSignal = true),
+    RadixFloatingPointMatrix(Radix2, FirstValidOutputFrame, r2SizeSeq, r2MultipleFrameCheckSizeSeq, r2DspMul4SizeSeq, 8, 80),
+    RadixFloatingPointMatrix(Radix22, InitialStoring, r22SizeSeq, r22MultipleFrameCheckSizeSeq, r22DspMul4SizeSeq, 16, 90, includeSelectedSignal = true),
   )
 
   private def radixConfigs(matrix: RadixFloatingPointMatrix): Iterator[FloatingPointCase] = {
@@ -90,7 +90,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
     } yield FloatingPointCase(
       radix = matrix.radix,
       check = matrix.check,
-      name  = "pipeline variant",
+      name  = "with pipeline latency variant",
       fft = FFTDutConfiguration(
         size        = size,
         decimation  = decimation,
@@ -106,7 +106,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
           FloatingPointCase(
             radix      = matrix.radix,
             check      = FirstValidOutputFrame,
-            name       = "selected non-sparse signal",
+            name       = "with selected non-sparse signal",
             fft        = FFTDutConfiguration(size = 64, decimation = decimation),
             seedOffset = 70,
           )
@@ -128,13 +128,13 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
     )
 
     val fourMul = for {
-      size       <- matrix.use4MulsSizes.iterator
+      size       <- matrix.dspMul4Sizes.iterator
       decimation <- decimationSeq.iterator
     } yield FloatingPointCase(
       radix = matrix.radix,
       check = matrix.check,
-      name  = "four real multipliers",
-      fft   = FFTDutConfiguration(size = size, decimation = decimation, use4Muls = true),
+      name  = "with dspMul4 complex multiply",
+      fft   = FFTDutConfiguration(size = size, decimation = decimation, dspMul4 = true),
       seedOffset = 50,
     )
 
@@ -144,7 +144,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
     } yield FloatingPointCase(
       radix = matrix.radix,
       check = matrix.check,
-      name  = "SRAM delays",
+      name  = "with SRAM delay buffers",
       fft = FFTDutConfiguration(
         size           = 64,
         decimation     = decimation,
@@ -160,24 +160,21 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
   private val radixCaseConfigs: Iterator[FloatingPointCase] =
     radixMatrices.iterator.flatMap(radixConfigs)
 
-  private val stageGrowthConfigs: Iterator[FloatingPointCase] = {
-    val configs = for {
-      radix         <- Seq(Radix2, Radix22).iterator
-      size          <- stageGrowthSizeSeq.iterator
-      decimation    <- decimationSeq.iterator
-      growthPattern <- stageGrowthPatternSeq.iterator
-    } yield {
-      val growEnable = growthPattern.grow(log2Up(size))
-      FloatingPointCase(
-        radix      = radix,
-        check      = FirstValidOutputFrame,
-        name       = "stage growth",
-        fft        = FFTDutConfiguration(size = size, decimation = decimation, growEnable = growEnable),
-        seedOffset = 120 + growthPattern.seedOffset + (if (radix == Radix22) 20 else 0) + (if (size == 1024) 10 else 0),
-        growName   = growthPattern.name,
-      )
-    }
-    configs
+  private val stageGrowthConfigs: Iterator[FloatingPointCase] = for {
+    radix         <- Seq(Radix2, Radix22).iterator
+    size          <- stageGrowthSizeSeq.iterator
+    decimation    <- decimationSeq.iterator
+    growthPattern <- stageGrowthPatternSeq.iterator
+  } yield {
+    val growEnable = growthPattern.grow(log2Up(size))
+    FloatingPointCase(
+      radix      = radix,
+      check      = FirstValidOutputFrame,
+      name       = "with stage growth pattern",
+      fft        = FFTDutConfiguration(size = size, decimation = decimation, growEnable = growEnable),
+      seedOffset = 120 + growthPattern.seedOffset + (if (radix == Radix22) 20 else 0) + (if (size == 1024) 10 else 0),
+      growName   = growthPattern.name,
+    )
   }
 
   (radixCaseConfigs ++ stageGrowthConfigs).foreach { config =>
@@ -208,7 +205,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
       radix          = config.radix,
       size           = config.fft.size,
       decimation     = config.fft.decimation,
-      use4Muls       = config.fft.use4Muls,
+      dspMul4        = config.fft.dspMul4,
       numAddPipes    = config.fft.addPipeRegs,
       numMulPipes    = config.fft.mulPipeRegs,
       minSRAMdepth   = config.fft.minSRAMdepth,
@@ -224,7 +221,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
       noiseAmplitudeRaw = dutNoiseAmplitudeRaw
     )
     val noisyPatterns = patterns.filter(_.noise.nonEmpty)
-    if (config.name == "selected non-sparse signal") {
+    if (config.name == "with selected non-sparse signal") {
       noisyPatterns.find(_.label == "multi-tone-noise").getOrElse(noisyPatterns.head)
     } else {
       noisyPatterns(math.floorMod(config.seedOffset, noisyPatterns.length))
@@ -241,7 +238,7 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
       ),
       (config.fft.addPipeRegs != 1)    -> ("addPipeRegs" -> config.fft.addPipeRegs),
       (config.fft.mulPipeRegs != 1)    -> ("mulPipeRegs" -> config.fft.mulPipeRegs),
-      config.fft.use4Muls              -> ("use4Muls" -> config.fft.use4Muls),
+      config.fft.dspMul4               -> ("dspMul4" -> config.fft.dspMul4),
       (config.fft.minSRAMdepth > 0)    -> ("minSRAMdepth" -> config.fft.minSRAMdepth),
       (config.fft.minSRAMdepth > 0)    -> ("singlePortSRAM" -> config.fft.singlePortSRAM),
       (config.inputFrames != 2)        -> ("inputFrames" -> config.inputFrames),
@@ -249,13 +246,30 @@ class FFTvsFloatingPointSpec extends AnyFlatSpec with ChiselScalatestTester with
     )
 
   private def checkName(config: FloatingPointCase): String =
-    if (config.name.nonEmpty) config.name else config.check.label
+    if (config.name.nonEmpty) s"${config.check.label} ${config.name}" else config.check.label
 
   private def plotNameFor(config: FloatingPointCase, pattern: InputPatterns.FftFramePattern): String =
     s"fft-vs-floating-point-${config.radix.label}-${config.fft.decimation}-${config.fft.size}-" +
-      s"${checkName(config)}-${pattern.label}-add${config.fft.addPipeRegs}-mul${config.fft.mulPipeRegs}-" +
-      s"frames${config.inputFrames}-seed${config.seedOffset}-4mul${config.fft.use4Muls}-" +
+      s"${plotCheckName(config)}-${pattern.label}-add${config.fft.addPipeRegs}-mul${config.fft.mulPipeRegs}-" +
+      s"frames${config.inputFrames}-seed${config.seedOffset}-dspMul4${config.fft.dspMul4}-" +
       s"sram${config.fft.minSRAMdepth}-${config.fft.singlePortSRAM}-${growPlotSuffix(config)}"
+
+  private def plotCheckName(config: FloatingPointCase): String = {
+    val base = config.check match {
+      case FirstValidOutputFrame  => "first valid output frame"
+      case InitialStoring         => "R22 initial store output frame"
+      case MultipleAcceptedFrames => "multiple accepted frames produce output frames"
+    }
+    config.name match {
+      case ""                                    => base
+      case "with pipeline latency variant"       => "pipeline variant"
+      case "with selected non-sparse signal"     => "selected non-sparse signal"
+      case "with dspMul4 complex multiply"       => "four real multipliers"
+      case "with SRAM delay buffers"             => "SRAM delays"
+      case "with stage growth pattern"           => "stage growth"
+      case other                                 => s"$base $other"
+    }
+  }
 
   private def assertGrowthOutputFormat(config: FloatingPointCase, params: FFTParams): Unit =
     if (config.fft.growEnable.nonEmpty) {

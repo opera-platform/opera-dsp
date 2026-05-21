@@ -9,13 +9,13 @@ import java.io.File
 import javax.swing.SwingUtilities
 
 object PlotUtils {
-  private val PlotDpi = 144
-  private val ComparisonPlotWidth = 1800
-  private val ComparisonPlotHeight = 1200
-  private val TitleFont = new Font("SansSerif", Font.BOLD, 20)
-  private val LabelFont = new Font("SansSerif", Font.PLAIN, 18)
-  private val TickFont = new Font("SansSerif", Font.PLAIN, 16)
-  private val GridColor = new Color(220, 220, 220)
+  private val PlotDpi    = 144
+  private val PlotWidth  = 1800
+  private val PlotHeight = 1200
+  private val TitleFont  = new Font("SansSerif", Font.BOLD, 20)
+  private val LabelFont  = new Font("SansSerif", Font.PLAIN, 18)
+  private val TickFont   = new Font("SansSerif", Font.PLAIN, 16)
+  private val GridColor  = new Color(220, 220, 220)
 
   def writePlotIfEnabled(
       name       : String,
@@ -53,8 +53,8 @@ object PlotUtils {
     val figure = Figure()
     SwingUtilities.invokeAndWait { () =>
       figure.visible = false
-      figure.width = ComparisonPlotWidth
-      figure.height = ComparisonPlotHeight / 2
+      figure.width = PlotWidth
+      figure.height = PlotHeight / 2
       val panel = figure.subplot(1, 1, 0)
       panel += plot(DenseVector(Array(0.0, 1.0)), DenseVector(Array(sqnrDb, sqnrDb)), name = "SQNR")
       panel.title = f"$title - SQNR $sqnrDb%.2f dB"
@@ -87,8 +87,8 @@ object PlotUtils {
     val figure = Figure()
     SwingUtilities.invokeAndWait { () =>
       figure.visible   = false
-      figure.width     = ComparisonPlotWidth
-      figure.height    = ComparisonPlotHeight
+      figure.width     = PlotWidth
+      figure.height    = PlotHeight
       val magnitude    = figure.subplot(2, 1, 0)
       magnitude       += plot(bins, modelMag, name = modelLabel)
       magnitude       += plot(bins, breezeMag, name = breezeLabel)

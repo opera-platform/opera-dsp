@@ -18,13 +18,14 @@ class SDFStageIdleDutTester[DUT <: Module](
     with PeekPokeDspExtensions {
 
   reset(2)
-  poke(io.i_en, false)
-  poke(io.in, Complex(0.0, 0.0))
+  poke(io.in.valid, false)
+  poke(io.in.bits, Complex(0.0, 0.0))
+  poke(io.out.ready, true)
   io.i_divBy2.foreach(div => poke(div, false))
 
   for (cycle <- 0 until (params.stageSize + params.latency + params.addPipeRegs + 4)) {
     assert(peek(io.o_counter) == expectedCounter, s"idle counter moved at cycle $cycle")
-    assert(peek(io.o_en) == 0, s"idle o_en asserted at cycle $cycle")
+    assert(peek(io.out.valid) == 0, s"idle output valid asserted at cycle $cycle")
     step(1)
   }
 }
@@ -91,8 +92,9 @@ class SDFStageDutTester[DUT <: Module](
 
   reset(2)
   model.reset()
-  poke(io.i_en, false)
-  poke(io.in, Complex(0.0, 0.0))
+  poke(io.in.valid, false)
+  poke(io.in.bits, Complex(0.0, 0.0))
+  poke(io.out.ready, true)
   io.i_divBy2.foreach(div => poke(div, divBy2At(0)))
   step(1)
 
@@ -110,15 +112,15 @@ class SDFStageDutTester[DUT <: Module](
     val expected = model.step(input, enable, divBy2)
     noteOverflowCoverage(expected.trace)
 
-    poke(io.i_en, enable)
+    poke(io.in.valid, enable)
     poke(
-      io.in,
+      io.in.bits,
       Complex(model.inputFormat.toDouble(input.real), model.inputFormat.toDouble(input.imag))
     )
     io.i_divBy2.foreach(div => poke(div, divBy2))
 
     assert(peek(io.o_counter) == expected.counter, s"counter mismatch at cycle $cycle")
-    assert(peek(io.o_en) == (if (expected.valid) 1 else 0), s"o_en mismatch at cycle $cycle")
+    assert(peek(io.out.valid) == (if (expected.valid) 1 else 0), s"output valid mismatch at cycle $cycle")
     io.o_overflow.foreach { overflow =>
       assert(
         peek(overflow) == (if (expected.overflow) 1 else 0),
@@ -128,9 +130,9 @@ class SDFStageDutTester[DUT <: Module](
     sawExpectedOverflow ||= expected.overflow
 
     if (expected.valid) {
-      val received = peek(io.out)
-      val receivedRawReal = model.outputFormat.wrap(peek(io.out.real.asSInt.asInstanceOf[Bits]))
-      val receivedRawImag = model.outputFormat.wrap(peek(io.out.imag.asSInt.asInstanceOf[Bits]))
+      val received = peek(io.out.bits)
+      val receivedRawReal = model.outputFormat.wrap(peek(io.out.bits.real.asSInt.asInstanceOf[Bits]))
+      val receivedRawImag = model.outputFormat.wrap(peek(io.out.bits.imag.asSInt.asInstanceOf[Bits]))
       val expectedComplex = Complex(
         model.outputFormat.toDouble(expected.output.real),
         model.outputFormat.toDouble(expected.output.imag)
@@ -177,6 +179,79 @@ class SDFStageDutTester[DUT <: Module](
 }
 
 /**
+ * Drives a stage until it presents an output, then stalls the Decoupled output
+ * and checks that valid/data/counter state is held while input ready is low.
+ */
+class SDFStageOutputStallDutTester[DUT <: Module](
+    dut         : DUT,
+    io          : RadixIO,
+    params      : RadixParams,
+    model       : FFTStageModel,
+    debugName   : String,
+    inputPattern: (FixedFormat, Int) => Vector[RawComplex],
+) extends PeekPokeTester(dut)
+    with PeekPokeDspExtensions {
+
+  private val inputs = inputPattern(model.inputFormat, params.stageSize)
+  private val maxCycles = 10 * params.stageSize + params.latency + params.addPipeRegs + params.delay + 32
+  private val stallCycles = 8
+
+  private def pokeSample(index: Int): Unit = {
+    val sample = inputs(index % inputs.length)
+    poke(io.in.bits, Complex(model.inputFormat.toDouble(sample.real), model.inputFormat.toDouble(sample.imag)))
+  }
+
+  private def rawOutput(): RawComplex =
+    RawComplex(
+      model.outputFormat.wrap(peek(io.out.bits.real.asSInt.asInstanceOf[Bits])),
+      model.outputFormat.wrap(peek(io.out.bits.imag.asSInt.asInstanceOf[Bits]))
+    )
+
+  reset(2)
+  poke(io.in.valid, false)
+  poke(io.out.ready, true)
+  poke(io.in.bits, Complex(0.0, 0.0))
+  io.i_divBy2.foreach(div => poke(div, params.divBy2))
+  step(1)
+
+  var inputIndex = 0
+  var cycle = 0
+  var stalled = false
+
+  while (!stalled && cycle < maxCycles) {
+    poke(io.out.ready, true)
+    poke(io.in.valid, true)
+    pokeSample(inputIndex)
+
+    if (peek(io.out.valid) == 1) {
+      val held = rawOutput()
+      val heldCounter = peek(io.o_counter)
+
+      poke(io.out.ready, false)
+      assert(peek(io.in.ready) == 0, s"$debugName input ready stayed high while output was stalled")
+
+      for (stall <- 0 until stallCycles) {
+        assert(peek(io.out.valid) == 1, s"$debugName output valid dropped during stall cycle $stall")
+        assert(rawOutput() == held, s"$debugName output bits changed during stall cycle $stall")
+        assert(peek(io.o_counter) == heldCounter, s"$debugName counter changed during stall cycle $stall")
+        step(1)
+      }
+
+      poke(io.out.ready, true)
+      step(1)
+      stalled = true
+    } else {
+      assert(peek(io.in.ready) == 1, s"$debugName input ready unexpectedly low before output stall")
+      inputIndex += 1
+      cycle += 1
+      step(1)
+    }
+  }
+
+  assert(stalled, s"$debugName did not produce an output to stall within $maxCycles cycles")
+}
+
+/**
  * Resets an SDF stage between independent input bursts and checks every valid
  * sample from each post-reset epoch against the scalar model.
  */
@@ -211,8 +286,9 @@ class SDFStageResetDutTester[DUT <: Module](
     Vector.tabulate(chirpsPerEpoch)(chirpIndex => chirp(epoch, chirpIndex)).flatten
 
   private def initializePins(): Unit = {
-    poke(io.i_en, false)
-    poke(io.in, Complex(0.0, 0.0))
+    poke(io.in.valid, false)
+    poke(io.in.bits, Complex(0.0, 0.0))
+    poke(io.out.ready, true)
     io.i_divBy2.foreach(div => poke(div, params.divBy2))
   }
 
@@ -247,9 +323,9 @@ class SDFStageResetDutTester[DUT <: Module](
       val sample = if (hasInput) input(inputIndex) else zero
       val expected = model.step(sample, hasInput, params.divBy2)
 
-      poke(io.i_en, hasInput)
+      poke(io.in.valid, hasInput)
       poke(
-        io.in,
+        io.in.bits,
         Complex(model.inputFormat.toDouble(sample.real), model.inputFormat.toDouble(sample.imag))
       )
       io.i_divBy2.foreach(div => poke(div, params.divBy2))
@@ -259,14 +335,14 @@ class SDFStageResetDutTester[DUT <: Module](
         s"$debugName counter mismatch after reset epoch $epoch cycle $cycles"
       )
       assert(
-        peek(io.o_en) == (if (expected.valid) 1 else 0),
-        s"$debugName o_en mismatch after reset epoch $epoch cycle $cycles"
+        peek(io.out.valid) == (if (expected.valid) 1 else 0),
+        s"$debugName output valid mismatch after reset epoch $epoch cycle $cycles"
       )
 
       if (expected.valid) {
         if (validIndex >= warmupSamplesPerEpoch && checked < checkedSamplesPerEpoch) {
-          val receivedRawReal = model.outputFormat.wrap(peek(io.out.real.asSInt.asInstanceOf[Bits]))
-          val receivedRawImag = model.outputFormat.wrap(peek(io.out.imag.asSInt.asInstanceOf[Bits]))
+          val receivedRawReal = model.outputFormat.wrap(peek(io.out.bits.real.asSInt.asInstanceOf[Bits]))
+          val receivedRawImag = model.outputFormat.wrap(peek(io.out.bits.imag.asSInt.asInstanceOf[Bits]))
           assert(
             receivedRawReal == expected.output.real,
             s"$debugName real mismatch after reset epoch $epoch sample $checked cycle $cycles: " +

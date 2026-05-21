@@ -47,6 +47,7 @@ class BitReverseSpec extends AnyFlatSpec with ChiselScalatestTester with TestCon
     )
 
     it should TestUtils.passWhen(
+      "check"         -> "bit-reverse frame output order",
       "memDepth"      -> config.memDepth,
       "frameSize"     -> config.frameSize,
       "runTime"       -> config.runTime,

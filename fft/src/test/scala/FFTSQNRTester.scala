@@ -7,22 +7,22 @@ import dsptools.misc.PeekPokeDspExtensions
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * Drives the public FFT DUT and plots SQNR against a floating-point FFT reference.
+ * Drives the FFT DUT and plots SQNR against a floating-point FFT reference.
  */
 private[fft] final class FFTSQNRTester(
-    dut:      FFT,
-    params:   FFTParams,
-    pattern:  InputPatterns.FftFramePattern,
+    dut     : FFT,
+    params  : FFTParams,
+    pattern : InputPatterns.FftFramePattern,
     plotName: String,
 ) extends PeekPokeTester[FFT](dut)
     with PeekPokeDspExtensions {
 
-  private val inFormat = FFTModel.inputFormat(params)
+  private val inFormat  = FFTModel.inputFormat(params)
   private val peekedData = ArrayBuffer.empty[Complex]
 
-  private val targetFrame = InputPatterns.fftFrame(params, pattern)
+  private val targetFrame     = InputPatterns.fftFrame(params, pattern)
   private val inputStreamData = FFTModelTestUtils.repeatedDutInput(params, targetFrame, frames = 3)
-  private val expectedData = FFTModelTestUtils.floatingPointFrame(params, targetFrame)
+  private val expectedData    = FFTModelTestUtils.floatingPointFrame(params, targetFrame)
 
   reset(2)
   poke(dut.io.in.valid, false)
@@ -32,9 +32,9 @@ private[fft] final class FFTSQNRTester(
   step(2)
 
   var writeCounter = 0
-  var readCounter = 0
-  var cycles = 0
-  val maxCycles = 120 * inputStreamData.length
+  var readCounter  = 0
+  var cycles       = 0
+  val maxCycles    = 120 * inputStreamData.length
 
   while (readCounter < expectedData.length && cycles < maxCycles) {
     val hasInput = writeCounter < inputStreamData.length
