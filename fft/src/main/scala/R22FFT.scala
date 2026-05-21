@@ -11,7 +11,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
 
   // Constants
   private val isItDIF          = params.decimation == DIF
-  private val noOfStages       = log2Ceil(params.fftSize)
+  private val noOfStages       = params.stageCount
   private val stageDelays      = (if (isItDIF) (0 until noOfStages).reverse else 0 until noOfStages).map(i => 1 << i)
   private val stageSizes       = stageDelays.map(_ << 1)
   private val cumulativeDelays = stageDelays.scanLeft(0)(_ + _)
@@ -36,10 +36,9 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   }
 
   // Latencies
-  private val complexMulLatency = if (params.use4Muls) params.numAddPipes + params.numMulPipes else 2 * params.numAddPipes + params.numMulPipes
-  private val stageLatency      = params.numAddPipes + complexMulLatency
-  private val latency           = stageLatency * noOfStages
-  private val outputQueueReserve = latency + 1
+  private val complexMulLatency = params.complexMulLatency
+  private val stageLatency      = params.stageLatency
+  private val coreInflightCountWidth = log2Ceil(2 * params.fftSize + stageLatency * noOfStages + 8)
 
   // Registers
   private val r_num_stages      = if (params.runTime) Some(RegInit(noOfStages.U(stageCountWidth.W))) else None
@@ -54,6 +53,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   private val r_core_count = RegInit(0.U(log2Ceil(params.fftSize).W))
   private val r_initial_out_done = RegInit(false.B)
   private val r_out_count = RegInit(0.U(log2Ceil(params.fftSize).W))
+  private val r_core_inflight = RegInit(0.U(coreInflightCountWidth.W))
 
   // Wires
   private val w_pair_mul_outputs =
@@ -66,6 +66,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   private val w_core_in_fire   = Wire(Bool())
   private val w_in_fire        = Wire(Bool())
   private val w_core_in        = Wire(params.inDataType)
+  private val w_pipeline_advance = Wire(Bool())
 
   // Twiddle factor infrastructure
   private val LUT = if (noOfTwiddles > 0) Some(QuarterWaveSineLUT(1 << noOfStages, params.twiddleType)) else None
@@ -101,7 +102,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
     else 0.U(log2Ceil(params.fftSize + 1).W)
 
   private def cfgDelay[T <: Data](data: T, cycles: Int, init: T): T =
-    withReset(w_cfg_reset) { ShiftRegister(data, cycles, init, true.B) }
+    withReset(w_cfg_reset) { Utils.delay(data, cycles, init, w_pipeline_advance) }
   private def stageActive(i: Int): Bool = if (params.runTime) w_first_active_stage <= stageRoleIndices(i).U else true.B
   private def stageOdd(i: Int): Bool = if (params.runTime) (stageRoleIndices(i).U - w_first_active_stage)(0) else staticStageOdd(i).B
   private def stageActiveOdd(i: Int): Bool = if (params.runTime) stageActive(i) && stageOdd(i) else staticStageOdd(i).B
@@ -119,7 +120,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   }
 
   private def bypassOrInverted(index: Int, data: DspComplex[FixedPoint], inverted: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
-    val w_inverted_d = ShiftRegister(inverted, complexMulLatency)
+    val w_inverted_d = Utils.delay(inverted, complexMulLatency, w_pipeline_advance)
     if (params.runTime) Mux(!stageActiveOdd(index), w_inverted_d, data)
     else if (staticStageOdd(index)) data
     else w_inverted_d
@@ -131,7 +132,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
       twiddle:   DspComplex[FixedPoint],
       inputType: DspComplex[FixedPoint],
   ): DspComplex[FixedPoint] =
-    Utils.complexMul(data, twiddle, inputType, params.numAddPipes, params.numMulPipes, params.resolvedTwiddleTrimTypes(index), params.use4Muls)
+    Utils.stallableComplexMul(data, twiddle, inputType, complexMulLatency, params.resolvedTwiddleTrimTypes(index), params.dspMul4, w_pipeline_advance)
 
   private def twiddleAddress(index: Int): UInt = {
     val w_offset =
@@ -148,7 +149,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
       if (pair >= 0 && pair < noOfTwiddles) w_pair_twiddles.get(pair) else w_zero_twiddle
     }
 
-  private def trivialInvert(index: Int, stage: R22SDF): Bool = {
+  private def trivialInvert(index: Int, stage: SDFStage): Bool = {
     val width = log2Ceil(stageSizes(index))
     val w_raw =
       if (isItDIF) {
@@ -193,30 +194,13 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   }
 
   // Stage instantiation and twiddle control
-  val sdf_stages: Seq[R22SDF] = stageDelays.zipWithIndex.map {
+  val sdf_stages: Seq[SDFStage] = stageDelays.zipWithIndex.map {
     case (delay, i) =>
-      val stage = withReset(w_cfg_reset) { Module(new R22SDF(RadixParams(
-        inDataType   = params.stageInputType(i),
-        outDataType  = params.stageOutputType(i),
-        twiddleType   = params.twiddleType,
-        stageSize     = stageSizes(i),
-        decimation    = params.decimation,
-        overflowReg   = params.overflowReg,
-        divBy2Reg     = params.divBy2Reg,
-        divBy2        = params.stageDivBy2(i),
-        growEnable    = params.stageGrowEnable(i),
-        latency       = complexMulLatency,
-        addPipeRegs   = params.numAddPipes,
-        mulPipeRegs   = params.numMulPipes,
-        dspMul4       = params.use4Muls,
-        delay         = delay,
-        bufferAsMem   = params.minSRAMdepth < delay,
-        singlePortMem = params.singlePortSRAM,
-        trimType      = params.resolvedStageTrimTypes(i),
-      ))) }
+      val stage = withReset(w_cfg_reset) { Module(new SDFStage(params.radixParams(i, delay))) }
 
       if (params.divBy2Reg)   stage.io.i_divBy2.get := r_divBy2.get(i)
       if (params.overflowReg) io.o_overflow.get(i)  := stage.io.o_overflow.get
+      stage.io.out.ready := w_pipeline_advance
 
       stage
   }
@@ -226,7 +210,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
     val w_nontrivial_twiddle =
       if (params.runTime || stageHasTwiddleControl(i)) {
         val w_pair_twiddle = pairTwiddleForStage(i)
-        if (isItDIF) ShiftRegister(w_pair_twiddle, params.numAddPipes) else w_pair_twiddle
+        if (isItDIF) Utils.delay(w_pair_twiddle, params.numAddPipes, w_pipeline_advance) else w_pair_twiddle
       } else {
         w_zero_twiddle
       }
@@ -241,39 +225,39 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
 
   // Enable chain: valid and counter phase move through the active SDF stages.
   sdf_stages.zipWithIndex.foreach { case (s, index) =>
-    s.io.i_en := w_stage_schedule(index).w_i_en
+    s.io.in.valid := w_stage_schedule(index).w_i_en
   }
 
   // Data path: connect stages in series, applying radix-2^2 trivial rotations and shared twiddles.
   val w_chain_outputs = sdf_stages.map(_.io).zipWithIndex.scanLeft(w_core_in: DspComplex[FixedPoint]) {
     case (prevOut, (stage, index)) =>
-      val w_prev_stage_in = Utils.resizeComplex(prevOut, stage.in.cloneType)
-      val w_core_stage_in = Utils.resizeComplex(w_core_in, stage.in.cloneType)
+      val w_prev_stage_in = Utils.resizeComplexData(prevOut, stage.in.bits.cloneType)
+      val w_core_stage_in = Utils.resizeComplexData(w_core_in, stage.in.bits.cloneType)
       val (w_invert, w_twiddle) = w_stage_controls(index)
 
       if (isItDIF) {
-        val w_stage_in = Wire(stage.in.cloneType)
+        val w_stage_in = Wire(stage.in.bits.cloneType)
         if (params.runTime) {
-          w_stage_in := Mux(stageActive(index), Mux(index.U === w_first_active_stage, w_core_stage_in, w_prev_stage_in), 0.U.asTypeOf(stage.in))
+          w_stage_in := Mux(stageActive(index), Mux(index.U === w_first_active_stage, w_core_stage_in, w_prev_stage_in), 0.U.asTypeOf(stage.in.bits))
         } else if (index == 0) {
           w_stage_in := w_core_stage_in
         } else {
           w_stage_in := w_prev_stage_in
         }
 
-        stage.in := w_stage_in
-        val w_inverted = Utils.invertComplexData(stage.out, w_invert)
-        val w_out = Wire(stage.out.cloneType)
+        stage.in.bits := w_stage_in
+        val w_inverted = Utils.invertComplexData(stage.out.bits, w_invert)
+        val w_out = Wire(stage.out.bits.cloneType)
 
         if (index == 0 || index == noOfStages - 1) {
-          val w_pass_data = if (index == 0) Mux(stageActive(index), w_inverted, 0.U.asTypeOf(stage.out)) else stage.out
-          w_out := ShiftRegister(w_pass_data, complexMulLatency)
+          val w_pass_data = if (index == 0) Mux(stageActive(index), w_inverted, 0.U.asTypeOf(stage.out.bits)) else stage.out.bits
+          w_out := Utils.delay(w_pass_data, complexMulLatency, w_pipeline_advance)
         } else if (index % 2 == 1) {
           val pair = index >> 1
           val w_mul_input = Mux(
             stageActiveOdd(index),
-            stage.out,
-            Mux(stageActive(index), sdf_stages(index + 1).io.out.asTypeOf(stage.out), 0.U.asTypeOf(stage.out))
+            stage.out.bits,
+            Mux(stageActive(index), sdf_stages(index + 1).io.out.bits.asTypeOf(stage.out.bits), 0.U.asTypeOf(stage.out.bits))
           )
           val w_mul_twiddle = Mux(
             stageActiveOdd(index),
@@ -281,31 +265,31 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
             Mux(stageActive(index), w_stage_controls(index + 1)._2, w_zero_twiddle)
           )
           w_pair_mul_outputs.get(pair) := twiddleMul(index, w_mul_input, w_mul_twiddle, params.stageOutputType(index))
-          w_out := bypassOrInverted(index, w_pair_mul_outputs.get(pair).asTypeOf(stage.out), w_inverted)
+          w_out := bypassOrInverted(index, w_pair_mul_outputs.get(pair).asTypeOf(stage.out.bits), w_inverted)
         } else {
-          w_out := bypassOrInverted(index, w_pair_mul_outputs.get((index - 1) >> 1).asTypeOf(stage.out), w_inverted)
+          w_out := bypassOrInverted(index, w_pair_mul_outputs.get((index - 1) >> 1).asTypeOf(stage.out.bits), w_inverted)
         }
         w_out
       } else {
         val w_inverted = Utils.invertComplexData(w_prev_stage_in, w_invert)
-        val w_stage_in = Wire(stage.in.cloneType)
-        stage.in := w_stage_in
+        val w_stage_in = Wire(stage.in.bits.cloneType)
+        stage.in.bits := w_stage_in
 
         if (index == noOfStages - 1 || index == 0) {
-          val w_pass_data = if (index == noOfStages - 1) Mux(stageActive(index), w_inverted, 0.U.asTypeOf(stage.in)) else w_prev_stage_in
-          w_stage_in := ShiftRegister(w_pass_data, complexMulLatency)
+          val w_pass_data = if (index == noOfStages - 1) Mux(stageActive(index), w_inverted, 0.U.asTypeOf(stage.in.bits)) else w_prev_stage_in
+          w_stage_in := Utils.delay(w_pass_data, complexMulLatency, w_pipeline_advance)
         } else if (index % 2 == 0) {
           val pair = (index - 2) >> 1
-          val w_fb_data = sdf_stages(index - 2).io.out.asTypeOf(stage.in)
-          val w_mul_input = Mux(stageActiveOdd(index), w_prev_stage_in, Mux(stageActive(index), w_fb_data, 0.U.asTypeOf(stage.in)))
+          val w_fb_data = sdf_stages(index - 2).io.out.bits.asTypeOf(stage.in.bits)
+          val w_mul_input = Mux(stageActiveOdd(index), w_prev_stage_in, Mux(stageActive(index), w_fb_data, 0.U.asTypeOf(stage.in.bits)))
           val w_mul_twiddle = Mux(stageActiveOdd(index), w_twiddle, Mux(stageActive(index), w_stage_controls(index - 1)._2, w_zero_twiddle))
           w_pair_mul_outputs.get(pair) := twiddleMul(index, w_mul_input, w_mul_twiddle, params.stageInputType(index))
-          w_stage_in := bypassOrInverted(index, w_pair_mul_outputs.get(pair).asTypeOf(stage.in), w_inverted)
+          w_stage_in := bypassOrInverted(index, w_pair_mul_outputs.get(pair).asTypeOf(stage.in.bits), w_inverted)
         } else {
-          w_stage_in := bypassOrInverted(index, w_pair_mul_outputs.get((index - 1) >> 1).asTypeOf(stage.in), w_inverted)
+          w_stage_in := bypassOrInverted(index, w_pair_mul_outputs.get((index - 1) >> 1).asTypeOf(stage.in.bits), w_inverted)
         }
 
-        stage.out
+        stage.out.bits
       }
   }.tail
 
@@ -319,24 +303,25 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
   }
 
   val outQueue = withReset(w_cfg_reset) {
-    Module(new Queue(UInt(params.fftOutputType.getWidth.W), entries = 2 * outputQueueReserve, pipe = true, flow = false))
+    Module(new Queue(UInt(params.fftOutputType.getWidth.W), entries = 2, pipe = true, flow = false))
   }
   outQueue.io.enq.bits := (if (isItDIF) {
-    Utils.resizeComplex(ShiftRegister(sdf_stages.last.io.out, complexMulLatency), params.fftOutputType)
+    Utils.resizeComplexData(Utils.delay(sdf_stages.last.io.out.bits, complexMulLatency, w_pipeline_advance), params.fftOutputType)
   } else {
-    finalStage(w_chain_outputs.map(Utils.resizeComplex(_, params.fftOutputType)))
+    finalStage(w_chain_outputs.map(Utils.resizeComplexData(_, params.fftOutputType)))
   }).asUInt
   outQueue.io.enq.valid := w_final_stage_valid && (r_initial_out_done || w_last_stage_frame_done) && !w_cfg_load
   outQueue.io.deq.ready := io.out.ready && !w_cfg_load
+  w_pipeline_advance := !w_cfg_load && outQueue.io.enq.ready
 
   val w_cfg_draining = w_runtime_drain_pending && !w_cfg_load
-  w_core_ready := !w_cfg_load && outQueue.io.enq.ready && (outQueue.io.count < outputQueueReserve.U)
+  w_core_ready := !w_cfg_load && sdf_stages.head.io.in.ready
   w_in_fire := !w_runtime_drain_pending && io.in.valid && w_core_ready
   w_core_in_fire := (if (params.runTime) Mux(w_cfg_draining, w_core_ready, w_in_fire) else w_in_fire)
   w_core_in := (if (params.runTime) Mux(w_cfg_draining, 0.U.asTypeOf(params.inDataType), io.in.bits) else io.in.bits)
   io.in.ready  := !w_runtime_drain_pending && w_core_ready
   io.out.valid := outQueue.io.deq.valid && !w_cfg_load
-  w_out_frame_busy := outQueue.io.deq.valid || r_out_count =/= 0.U
+  w_out_frame_busy := outQueue.io.deq.valid || r_out_count =/= 0.U || r_core_inflight =/= 0.U
 
   Utils.assignFftOutputByDirection(outQueue.io.deq.bits.asTypeOf(params.fftOutputType), io.out.bits, w_fft_or_ifft)
   io.o_last := io.out.valid && w_out_last
@@ -348,6 +333,11 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
     when(w_core_in_fire) {
       r_core_count := Mux(r_core_count === w_last_sample, 0.U, r_core_count + 1.U)
     }
+    when(w_core_in_fire && !outQueue.io.enq.fire) {
+      r_core_inflight := r_core_inflight + 1.U
+    }.elsewhen(!w_core_in_fire && outQueue.io.enq.fire) {
+      r_core_inflight := r_core_inflight - 1.U
+    }
     r_initial_out_done := r_initial_out_done || w_last_stage_frame_done
   }
 
@@ -355,6 +345,7 @@ class R22FFT(val params: FFTParams) extends Module with HasIO {
     when(w_cfg_load) {
       Seq(r_out_count, r_core_count).foreach(_ := 0.U)
       r_initial_out_done := false.B
+      r_core_inflight := 0.U
     }.otherwise {
       updateFrameState()
     }

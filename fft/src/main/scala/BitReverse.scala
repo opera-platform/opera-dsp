@@ -31,9 +31,8 @@ class BitReverseIO(val params: BitReverseParams) extends Bundle {
 class BitReverse(val params: BitReverseParams) extends Module {
   val io: BitReverseIO = IO(new BitReverseIO(params))
 
-  // Double buffer
   val memDepth: Int        = params.memDepth
-  private val memories     = Seq.fill(2) { SyncReadMem(memDepth, params.dataType) } // Double buffer
+  private val memories     = Seq.fill(2) { SyncReadMem(memDepth, params.dataType) }
   private val w_mem_data_1 = Wire(params.dataType)
   private val w_mem_data_2 = Wire(params.dataType)
   
@@ -41,32 +40,19 @@ class BitReverse(val params: BitReverseParams) extends Module {
   private object FSM extends ChiselEnum { val s_idle, s_write, s_write_read, s_read = Value }
   private val r_state = RegInit(FSM.s_idle)
 
-  // Logic and Counters for reading and writing to memories
-  private val w_valid      = Wire(Bool()) // data is valid for reading
-  private val w_last       = Wire(Bool()) // last flag for output
-  private val w_out        = Wire(UInt((io.in.bits.getWidth + 1).W)) // Helper variable to put data and last into a queue
-  private val w_wr_cnt_rst = Wire(Bool()) // write counter reset
-  private val w_rd_cnt_rst = Wire(Bool()) // read counter reset
-  private val w_wr_wrap    = Wire(Bool()) // wrap the value of write counter
-  private val w_rd_wrap    = Wire(Bool()) // wrap the value of read counter
-  private val w_wr_en      = Wire(Bool()) // Write counter enable
-  private val w_rd_en      = Wire(Bool()) // Read counter enable
-  private val r_wr_cnt     = CounterWithReset(w_wr_en, memDepth, w_wr_cnt_rst)._1 // write counter with reset
-  private val r_rd_cnt     = CounterWithReset(w_rd_en, memDepth, w_rd_cnt_rst)._1 // read counter with reset
-  private val w_rd_addr: UInt = Wire(r_rd_cnt.cloneType)
-  private val w_wr_addr: UInt = Wire(r_wr_cnt.cloneType)
+  private val w_valid      = r_state === FSM.s_write_read || r_state === FSM.s_read
+  private val w_wr_cnt_rst = Wire(Bool())
+  private val w_rd_cnt_rst = Wire(Bool())
+  private val r_wr_cnt     = CounterWithReset(io.in.fire, memDepth, w_wr_cnt_rst)._1
+  private val r_rd_cnt     = CounterWithReset(w_valid && io.out.ready, memDepth, w_rd_cnt_rst)._1
   private val r_wr_mem_sel: Bool = RegInit(false.B) // select in which memory to write
   private val r_rd_mem_sel: Bool = RegInit(false.B) // select from which memory to read
-  // Conditions to wrap and reset counters
-  w_wr_wrap    := r_wr_cnt === (io.i_samples.getOrElse(memDepth.U) - 1.U) && io.in.fire
-  w_rd_wrap    := r_rd_cnt === (io.i_samples.getOrElse(memDepth.U) - 1.U) && io.out.fire
+  private val w_sample_last = io.i_samples.getOrElse(memDepth.U) - 1.U
+  private val w_wr_wrap    = r_wr_cnt === w_sample_last && io.in.fire
+  private val w_rd_wrap    = r_rd_cnt === w_sample_last && io.out.fire
+  private val w_out        = Cat(RegNext(w_rd_wrap), Mux(RegNext(r_rd_mem_sel), w_mem_data_2, w_mem_data_1).asUInt)
   w_wr_cnt_rst := w_wr_wrap || reset.asBool
   w_rd_cnt_rst := w_rd_wrap || reset.asBool
-  w_wr_en      := io.in.fire
-  w_rd_en      := w_valid && io.out.ready
-  w_valid      := r_state === FSM.s_write_read || r_state === FSM.s_read
-  w_last       := RegNext(w_rd_wrap)
-  w_out        := Cat(w_last, Mux(RegNext(r_rd_mem_sel), w_mem_data_2, w_mem_data_1).asUInt)
 
   // Generate write and read address
   private val fftStageNumber = log2Ceil(memDepth)
@@ -77,8 +63,7 @@ class BitReverse(val params: BitReverseParams) extends Module {
     case (condition, numBits) =>
       condition -> Reverse(r_wr_cnt(numBits - 1, 0))
   }
-  w_wr_addr := MuxCase(0.U(fftStageNumber.W), w_mux_case_map)
-  w_rd_addr := r_rd_cnt
+  private val w_wr_addr = MuxCase(0.U(fftStageNumber.W), w_mux_case_map)
 
   when(r_state === FSM.s_idle) {
     // Reset state
@@ -106,8 +91,8 @@ class BitReverse(val params: BitReverseParams) extends Module {
 
   // Read and/or write to buffers
   if (params.singlePortMem) {
-    val w_address_1 = Mux(io.in.fire && (!r_wr_mem_sel), w_wr_addr, w_rd_addr)
-    val w_address_2 = Mux(io.in.fire &&   r_wr_mem_sel, w_wr_addr, w_rd_addr)
+    val w_address_1 = Mux(io.in.fire && (!r_wr_mem_sel), w_wr_addr, r_rd_cnt)
+    val w_address_2 = Mux(io.in.fire &&   r_wr_mem_sel, w_wr_addr, r_rd_cnt)
 
     val w_port_1 = memories.head(w_address_1)
     when(io.in.fire && !r_wr_mem_sel) { w_port_1 := io.in.bits }
@@ -123,8 +108,8 @@ class BitReverse(val params: BitReverseParams) extends Module {
     when(io.in.fire && r_wr_mem_sel) {
       memories.last(w_wr_addr) := io.in.bits
     }
-    w_mem_data_1 := memories.head(w_rd_addr)
-    w_mem_data_2 := memories.last(w_rd_addr)
+    w_mem_data_1 := memories.head(r_rd_cnt)
+    w_mem_data_2 := memories.last(r_rd_cnt)
   }
 
   // output logic

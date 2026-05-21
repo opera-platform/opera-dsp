@@ -34,7 +34,7 @@ private object FFTAppConfig {
     numMulPipes      = 1,
     direction        = true,
     directionReg     = true,
-    use4Muls         = false,
+    dspMul4          = false,
     useBitReverse    = true,
     minSRAMdepth     = 8,
     singlePortSRAM   = false,

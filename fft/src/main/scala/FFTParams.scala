@@ -51,7 +51,7 @@ case object Radix22 extends SDFRadix {
  * @param numMulPipes        Number of pipeline registers after multiplication operations.
  * @param direction          Static transform direction. `true` selects FFT ordering, `false` selects IFFT ordering.
  * @param directionReg       Enables runtime-selectable transform direction through `i_fft_or_ifft`.
- * @param use4Muls           Uses the four-real-multiplier complex multiplier implementation.
+ * @param dspMul4            Uses the four-real-multiplier complex multiplier implementation.
  * @param useBitReverse      Inserts top-level bit reversal for natural-order streaming at both ends.
  * @param minSRAMdepth       Delay lines deeper than this threshold use SRAM-backed storage.
  * @param singlePortSRAM     Uses single-port SRAM for eligible delay lines and bit-reversal buffers.
@@ -74,7 +74,7 @@ case class FFTParams(
   numMulPipes:       Int = 0,
   direction:         Boolean = true,
   directionReg:      Boolean = false,
-  use4Muls:          Boolean = false,
+  dspMul4:           Boolean = false,
   useBitReverse:     Boolean = false,
   minSRAMdepth:      Int = 0,
   singlePortSRAM:    Boolean = false,
@@ -83,7 +83,10 @@ case class FFTParams(
 
   require(isPow2(fftSize), "number of points must be a power of 2")
 
-  private val stageCount = log2Up(fftSize)
+  private[fft] val stageCount = log2Up(fftSize)
+  private[fft] val complexMulLatency =
+    if (dspMul4) numAddPipes + numMulPipes else 2 * numAddPipes + numMulPipes
+  private[fft] val stageLatency = numAddPipes + complexMulLatency
 
   private[fft] val stageGrowEnable: IndexedSeq[Boolean] =
     perStage("growEnable", growEnable, false)
@@ -118,6 +121,28 @@ case class FFTParams(
   }
 
   private[fft] def fftOutputType: DspComplex[FixedPoint] = stageDataTypes.last
+
+  private[fft] def radixParams(stage: Int, delay: Int): RadixParams =
+    RadixParams(
+      inDataType    = stageInputType(stage),
+      outDataType   = stageOutputType(stage),
+      twiddleType   = twiddleType,
+      stageSize     = delay << 1,
+      decimation    = decimation,
+      sdfRadix      = sdfRadix,
+      overflowReg   = overflowReg,
+      divBy2Reg     = divBy2Reg,
+      divBy2        = stageDivBy2(stage),
+      growEnable    = stageGrowEnable(stage),
+      latency       = complexMulLatency,
+      addPipeRegs   = numAddPipes,
+      mulPipeRegs   = numMulPipes,
+      dspMul4       = dspMul4,
+      delay         = delay,
+      bufferAsMem   = minSRAMdepth < delay,
+      singlePortMem = singlePortSRAM,
+      trimType      = resolvedStageTrimTypes(stage),
+    )
 
   private def perStage[A](name: String, values: Seq[A], default: A): IndexedSeq[A] = {
     val resolved = if (values.isEmpty) Seq.fill(stageCount)(default) else values

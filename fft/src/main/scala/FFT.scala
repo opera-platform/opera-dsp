@@ -8,42 +8,12 @@ import dsptools.numbers._
 import fixedpoint._
 
 /**
- * Top-level FFT streaming interface.
- *
- * The input and output streams use Decoupled complex samples. Frame boundaries are carried
- * separately through `i_last` and `o_last`. Runtime configuration and overflow status ports
- * are generated only when the matching fields are enabled in [[FFTParams]].
- *
- * @param params FFT configuration used to size the stream, control, and status signals.
- */
-class FFTTopIO(params: FFTParams) extends Bundle {
-  private val hasRuntimeConfig = params.runTime || params.divBy2Reg || params.directionReg
-
-  val in:  DecoupledIO[DspComplex[FixedPoint]] = Flipped(Decoupled(params.inDataType))
-  val out: DecoupledIO[DspComplex[FixedPoint]] = Decoupled(params.fftOutputType)
-
-  val i_last: Bool = Input(Bool())
-  val o_last: Bool = Output(Bool())
-
-  val i_load_cfg:    Option[Bool]      = if (hasRuntimeConfig) Some(Input(Bool())) else None
-  val i_size:        Option[UInt]      = if (params.runTime) Some(Input(UInt(log2Up(params.fftSize).W))) else None
-  val i_divBy2:      Option[Vec[Bool]] = if (params.divBy2Reg) Some(Input(Vec(log2Up(params.fftSize), Bool()))) else None
-  val i_fft_or_ifft: Option[Bool]      = if (params.directionReg) Some(Input(Bool())) else None
-
-  val overflow: Option[Vec[Bool]] = if (params.overflowReg) Some(Output(Vec(log2Up(params.fftSize), Bool()))) else None
-}
-
-object FFTTopIO {
-  def apply(params: FFTParams): FFTTopIO = new FFTTopIO(params)
-}
-
-/**
  * Top-level streaming single-path delay-feedback FFT.
  *
  * FFT is the wrapper around the radix SDF implementations. The selected
  * radix is controlled by `params.sdfRadix`: [[Radix2]] instantiates [[R2FFT]] and
  * [[Radix22]] instantiates [[R22FFT]]. The radix cores share the Decoupled complex stream interface
- * defined by [[FFTTopIO]], with `i_last` and `o_last` carrying frame boundaries.
+ * defined by [[FFTIO]], with `i_last` and `o_last` carrying frame boundaries.
  *
  * Runtime controls are present only when enabled in [[FFTParams]]. `i_size` selects the
  * active power-of-two FFT size, `i_divBy2` selects per-stage scaling, `i_fft_or_ifft`
@@ -58,7 +28,7 @@ object FFTTopIO {
  *               scaling, pipeline settings, and optional bit reversal.
  */
 class FFT(val params: FFTParams) extends Module {
-  val io: FFTTopIO = IO(FFTTopIO(params))
+  val io: FFTIO = IO(new FFTIO(params))
 
   private val bitReverseSuffix = if (params.useBitReverse) 1 else 0
   override def desiredName: String =
@@ -170,7 +140,9 @@ class FFT(val params: FFTParams) extends Module {
   }
 
   connectRuntimeConfig(fft)
-  connectOverflow(fft)
+  if (params.overflowReg) {
+    io.o_overflow.get <> fft.io.o_overflow.get
+  }
 
   if (params.useBitReverse) {
     connectWithBitReverse(fft)
@@ -183,12 +155,6 @@ class FFT(val params: FFTParams) extends Module {
     if (params.runTime)      fft.io.i_size.get        := cfgSizeValue.get
     if (params.divBy2Reg)    fft.io.i_divBy2.get      := cfgDivBy2Value.get
     if (params.directionReg) fft.io.i_fft_or_ifft.get := cfgDirectionValue.get
-  }
-
-  private def connectOverflow(fft: HasIO): Unit = {
-    if (params.overflowReg) {
-      io.overflow.get := fft.io.o_overflow.get
-    }
   }
 
   private def bitReverseParams: BitReverseParams =

@@ -3,83 +3,24 @@ package opera.fft
 import chisel3._
 import chisel3.util.{circt => _, _}
 import dspblocks._
-import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
-import freechips.rocketchip.diplomacy.AddressSet
 import freechips.rocketchip.regmapper._
-import freechips.rocketchip.resources._
-import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.diplomacy.lazymodule._
 import org.chipsalliance.diplomacy.nodes._
 
-class FFTAXI4(
-  address  : AddressSet,
-  params   : FFTParams,
-  beatBytes: Int = 4
-)(implicit p: Parameters)
-  extends FFTBlock[
-    AXI4MasterPortParameters,
-    AXI4SlavePortParameters,
-    AXI4EdgeParameters,
-    AXI4EdgeParameters,
-    AXI4Bundle
-  ](params, beatBytes) with AXI4DspBlock {
-
-  // Generate mem
-  override val mem: Option[AXI4RegisterNode] =
-    Some(AXI4RegisterNode(address = address, beatBytes))
-
-  // Override regmap if necessary
-  override def regmap(mapping: (Int, Seq[RegField])*): Unit =
-    if (mem.isDefined) mem.get.regmap(mapping: _*)
-    else {}
-}
-
-class FFTTL(
-  address  : AddressSet,
-  params   : FFTParams,
-  beatBytes: Int = 4
-)(implicit p: Parameters)
-  extends FFTBlock[
-    TLClientPortParameters,
-    TLManagerPortParameters,
-    TLEdgeOut,
-    TLEdgeIn,
-    TLBundle
-  ](params, beatBytes) with TLDspBlock {
-
-  val device: SimpleDevice = new SimpleDevice("TLFFT", Seq("opera-platform", "TLFFT")) {
-    override def describe(resources: ResourceBindings): Description = {
-      val Description(name, mapping) = super.describe(resources)
-      Description(name, mapping)
-    }
-  }
-
-  // Generate mem
-  override val mem: Option[TLRegisterNode] =
-    Some(TLRegisterNode(address = Seq(address), device = device, beatBytes = beatBytes))
-
-  // Override regmap if necessary
-  override def regmap(mapping: (Int, Seq[RegField])*): Unit =
-    if (mem.isDefined) mem.get.regmap(mapping: _*)
-    else {}
-}
-
-abstract class FFTBlock[D, U, E, O, B <: Data](
+abstract class FFTDspBlock[D, U, E, O, B <: Data](
   params   : FFTParams,
   beatBytes: Int
 ) extends LazyModule()(Parameters.empty)
     with DspBlock[D, U, E, O, B]
     with HasCSR {
 
-  // Get input and output widths
   private val inputWidth     : Int = params.inDataType.getWidth
   private val outputWidth    : Int = params.fftOutputType.getWidth
   private val inputBeatBytes : Int = math.ceil(inputWidth.toDouble / 8).toInt
   private val outputBeatBytes: Int = math.ceil(outputWidth.toDouble / 8).toInt
 
-  // AXI4 stream IN/OUT node
   private val slaveNode = AXI4StreamSlaveNode(AXI4StreamSlaveParameters())
   private val masterNode = AXI4StreamMasterNode(AXI4StreamMasterParameters(
     name = "outNode", n = outputBeatBytes
@@ -87,7 +28,6 @@ abstract class FFTBlock[D, U, E, O, B <: Data](
   val streamNode = NodeHandle(slaveNode, masterNode)
 
   lazy val module = new LazyModuleImp(this) {
-
     val out: AXI4StreamBundle = masterNode.out.head._1
     val in : AXI4StreamBundle = slaveNode.in.head._1
     assert(
@@ -95,10 +35,8 @@ abstract class FFTBlock[D, U, E, O, B <: Data](
       s"The input data width (${in.bits.data.getWidth}) should be the same as calculated one (${8 * inputBeatBytes})."
     )
 
-    // Block
     val fft = Module(new FFT(params))
 
-    // Control & Status registers
     private val stageCount       = log2Ceil(params.fftSize)
     private val hasRuntimeConfig = params.runTime || params.divBy2Reg || params.directionReg
     if (params.divBy2Reg || params.overflowReg) {
@@ -109,12 +47,27 @@ abstract class FFTBlock[D, U, E, O, B <: Data](
     }
 
     val w_load_cfg = WireDefault(false.B)
-    val r_size     = if (params.runTime)     Some(RegInit(stageCount.U(stageCount.W))) else None
-    val r_divBy2   = if (params.divBy2Reg)   Some(RegInit(VecInit(params.stageDivBy2.map(_.B)))) else None
-    val r_direction = if (params.directionReg) Some(RegInit(params.direction.B)) else None
-    val r_overflow = if (params.overflowReg) Some(RegInit(0.U(stageCount.W))) else None
+    val r_size = if (params.runTime) {
+      Some(RegInit(stageCount.U(stageCount.W)))
+    } else {
+      None
+    }
+    val r_divBy2 = if (params.divBy2Reg) {
+      Some(RegInit(VecInit(params.stageDivBy2.map(_.B))))
+    } else {
+      None
+    }
+    val r_direction = if (params.directionReg) {
+      Some(RegInit(params.direction.B))
+    } else {
+      None
+    }
+    val r_overflow = if (params.overflowReg) {
+      Some(RegInit(0.U(stageCount.W)))
+    } else {
+      None
+    }
 
-    // Connect input and output streams
     fft.io.in.valid := in.valid
     fft.io.in.bits  := in.bits.data(inputWidth - 1, 0).asTypeOf(params.inDataType)
     in.ready        := fft.io.in.ready
@@ -125,7 +78,6 @@ abstract class FFTBlock[D, U, E, O, B <: Data](
     out.bits.data    := fft.io.out.bits.asUInt.pad(8 * outputBeatBytes)
     out.bits.last    := fft.io.o_last
 
-    // Connect control registers with adequate IOs
     fft.io.i_load_cfg.foreach(_ := w_load_cfg)
     if (params.runTime)      fft.io.i_size.get        := r_size.get
     if (params.divBy2Reg)    fft.io.i_divBy2.get      := r_divBy2.get
@@ -182,13 +134,15 @@ abstract class FFTBlock[D, U, E, O, B <: Data](
       if (params.overflowReg) {
         Some(regs.overflow -> RegFieldGroup("overflow", Some("FFT sticky overflow status"),
           Seq(
-            RegField.w1ToClear(stageCount, r_overflow.get, fft.io.overflow.get.asUInt,
+            RegField.w1ToClear(stageCount, r_overflow.get, fft.io.o_overflow.get.asUInt,
               Some(RegFieldDesc("overflow", "Sticky per-stage overflow status; write 1 to clear each bit", reset = Some(0), volatile = true)))
           )
         ))
       } else None
     ).flatten
-    // define abstract register map
-    if (mapping.nonEmpty) regmap(mapping: _*)
+
+    if (mapping.nonEmpty) {
+      regmap(mapping: _*)
+    }
   }
 }

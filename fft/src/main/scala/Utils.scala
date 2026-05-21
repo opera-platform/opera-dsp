@@ -2,6 +2,7 @@ package opera.fft
 
 import chisel3._
 import chisel3.fromIntToWidth
+import chisel3.util.ShiftRegister
 import dsptools._
 import dsptools.numbers._
 import fixedpoint._
@@ -9,6 +10,14 @@ import freechips.rocketchip.diplomacy.AddressSet
 import play.api.libs.json.Json
 
 object Utils {
+  /** Enable-gated shift-register delay with zero-cycle passthrough. */
+  def delay[T <: Data](data: T, cycles: Int, en: Bool): T =
+    if (cycles == 0) data else ShiftRegister(data, cycles, en)
+
+  /** Enable-gated shift-register delay with explicit reset value and zero-cycle passthrough. */
+  def delay[T <: Data](data: T, cycles: Int, init: T, en: Bool): T =
+    if (cycles == 0) data else ShiftRegister(data, cycles, init, en)
+
   /** Pipelined complex multiply with explicit DSP context settings and trim point from the input type. */
   def complexMul(
       input       : DspComplex[FixedPoint],
@@ -17,7 +26,7 @@ object Utils {
       numAddPipes : Int,
       numMulPipes : Int,
       trimType    : TrimType,
-      use4Muls    : Boolean,
+      dspMul4     : Boolean,
   ): DspComplex[FixedPoint] = {
     val bpos = inputType.real.binaryPoint.get
     DspContext.alter(DspContext.current.copy(
@@ -25,12 +34,26 @@ object Utils {
       numMulPipes     = numMulPipes,
       trimType        = trimType,
       overflowType    = Grow,
-      complexUse4Muls = use4Muls
+      complexUse4Muls = dspMul4
     )) { input.context_*(twiddle).trimBinary(bpos) }
   }
 
-  /** Resize complex data through normal Chisel assignment semantics. */
-  def resizeComplex(data: DspComplex[FixedPoint], proto: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
+  /** Complex multiply whose value pipeline advances only when the surrounding FFT pipeline advances. */
+  def stallableComplexMul(
+      input       : DspComplex[FixedPoint],
+      twiddle     : DspComplex[FixedPoint],
+      inputType   : DspComplex[FixedPoint],
+      latency     : Int,
+      trimType    : TrimType,
+      dspMul4     : Boolean,
+      en          : Bool,
+  ): DspComplex[FixedPoint] = {
+    val w_product = complexMul(input, twiddle, inputType, 0, 0, trimType, dspMul4)
+    delay(w_product, latency, en)
+  }
+
+  /** Resize complex data to match a prototype through normal Chisel assignment semantics. */
+  def resizeComplexData(data: DspComplex[FixedPoint], proto: DspComplex[FixedPoint]): DspComplex[FixedPoint] = {
     val w_out = Wire(proto)
     w_out := data
     w_out
@@ -64,7 +87,7 @@ object Utils {
         }
       }
       w_scaled.zip(butterfly.zip(divided)).foreach {
-        case (w_out, (pass, half)) => w_out := Mux(divBy2, resizeComplex(half, outType), resizeComplex(pass, outType))
+        case (w_out, (pass, half)) => w_out := Mux(divBy2, resizeComplexData(half, outType), resizeComplexData(pass, outType))
       }
       (w_scaled, butterflyOverflow(butterfly))
     }
@@ -122,7 +145,7 @@ object ParseParameters {
         numMulPipes      = (parameters \ "numMulPipes").get.as[Int],
         direction        = (parameters \ "direction").get.as[Boolean],
         directionReg     = (parameters \ "directionReg").get.as[Boolean],
-        use4Muls         = (parameters \ "use4Muls").get.as[Boolean],
+        dspMul4          = (parameters \ "dspMul4").get.as[Boolean],
         useBitReverse    = (parameters \ "useBitReverse").get.as[Boolean],
         minSRAMdepth     = (parameters \ "minSRAMdepth").get.as[Int],
         singlePortSRAM   = (parameters \ "singlePortSRAM").get.as[Boolean],
