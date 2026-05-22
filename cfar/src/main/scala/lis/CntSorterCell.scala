@@ -1,9 +1,9 @@
-package lis
+package opera.lis
 
 import chisel3._
 import dsptools.numbers._
 
-class CntSorterCell [T <: Data: Real] (val params: LISParams[T], index: Int) extends Module {
+class CntSorterCell [T <: Data: Real] (val params: LISParams[T], index: Int, emitDiscardToLeft: Boolean = true) extends Module {
   val io = IO(new CntSorterCellIO(params))
 
   val u_ctrl = Module(new CntSorterCellCtrl)
@@ -13,8 +13,7 @@ class CntSorterCell [T <: Data: Real] (val params: LISParams[T], index: Int) ext
   val w_has_active_right_cell = w_is_active_cell && !w_is_last_active_cell
   val w_empty_cell_data       = LISNumeric.resetValue(params.dataType, useHigh = false)
 
-  // Neighbor comparisons and discard propagation define whether this cell shifts from the left side, 
-  // the right side, or keeps its current sorted value.
+  // Neighbor comparisons and discard propagation define whether this cell shifts from the left side, the right side, or keeps its current sorted value.
   if (index == 0) {
     u_ctrl.io.i_left_less_than_input := true.B
   }
@@ -56,8 +55,7 @@ class CntSorterCell [T <: Data: Real] (val params: LISParams[T], index: Int) ext
     }
   }
 
-  // Registered sorted value for this cell. State 0 is the idle/reset state used between frames, 
-  // while process/flush states shift values through the chain.
+  // Registered sorted value for this cell. State 0 is the idle/reset state used between frames, while process/flush states shift values through the chain.
   val r_sorted_data = RegInit(w_empty_cell_data)
 
   when (io.i_state === 0.U) {
@@ -70,9 +68,11 @@ class CntSorterCell [T <: Data: Real] (val params: LISParams[T], index: Int) ext
   val w_current_less_than_input = r_sorted_data < io.i_data
 
   // The FIFO position identifies the oldest active sample. That oldest sample is removed on the next sliding-window update.
+  val w_window_size    = io.i_window_size.getOrElse(params.maxWindowSize.U)
   val r_fifo_position  = RegInit(index.U(io.o_cell_state.fifo_position.getWidth.W))
-  val w_remove_current = r_fifo_position === (io.i_window_size.getOrElse(params.maxWindowSize.U) - 1.U)
+  val w_remove_current = r_fifo_position === (w_window_size - 1.U)
 
+  // Across the active cells the FIFO positions are always a permutation of {0 .. window_size-1}.
   when(w_update_register) {
     r_fifo_position := w_shifted_fifo_position + 1.U
   }.elsewhen(io.i_enable_sort) {
@@ -81,12 +81,13 @@ class CntSorterCell [T <: Data: Real] (val params: LISParams[T], index: Int) ext
   when(u_ctrl.io.o_reset_fifo_position && io.i_enable_sort) {
     r_fifo_position := 0.U
   }
+  assert(!w_is_active_cell || r_fifo_position < w_window_size, "CntSorterCell fifo position left the {0 .. window_size-1} window")
 
   u_ctrl.io.i_current_less_than_input := w_current_less_than_input
   u_ctrl.io.i_remove_current := w_remove_current
 
   // Drive neighbor-facing values. Edge outputs are tied to zero values because there is no real cell beyond the end of the chain.
-  if (index == 0) {
+  if (index == 0 || !emitDiscardToLeft) {
     io.o_discard_to_left := false.B
   }
   else {

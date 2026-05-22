@@ -1,4 +1,4 @@
-package lis
+package opera.lis
 
 import chisel3._
 

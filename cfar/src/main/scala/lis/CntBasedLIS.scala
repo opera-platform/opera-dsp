@@ -1,4 +1,4 @@
-package lis
+package opera.lis
 
 import chisel3._
 import chisel3.util._
@@ -27,7 +27,7 @@ class CntBasedLIS[T <: Data: Real](val params: LISParams[T]) extends Module {
   // The chain inserts the new sample and removes the oldest active sample.
   val u_counter_cells = cellIndices.map {
     case (index) => {
-      val u_cell = Module(new CntSorterCell(params,index))
+      val u_cell = Module(new CntSorterCell(params, index))
       u_cell.io.i_data := io.i_data.bits
       if (params.runTime) {
         u_cell.io.i_window_size.get   := w_lis_ctrl.r_active_window_size
