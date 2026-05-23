@@ -1,4 +1,4 @@
-package lis
+package opera.lis
 
 import chisel3._
 import chisel3.util._
@@ -32,6 +32,7 @@ private[lis] object LISCtrl {
     val r_state              = RegInit(s_idle)
     val w_next_state         = WireDefault(r_state)
     val r_active_window_size = RegInit(params.maxWindowSize.U(sizeWidth.W))
+    val w_effective_window_size = Mux(r_state === s_idle, i_window_size, r_active_window_size)
     val w_last_active_index  = (r_active_window_size - 1.U)(indexWidth - 1, 0)
 
     val r_input_count        = RegInit(0.U(sizeWidth.W))
@@ -46,7 +47,7 @@ private[lis] object LISCtrl {
       r_input_count := 0.U
     }
 
-    when(r_input_count === (r_active_window_size - 1.U) && i_data_fire) {
+    when(r_input_count === (w_effective_window_size - 1.U) && i_data_fire) {
       r_window_full := true.B
     }.elsewhen(w_next_state === s_idle) {
       r_window_full := false.B
@@ -69,7 +70,7 @@ private[lis] object LISCtrl {
         when(w_input_last_fire) { w_next_state := s_flush }
       }
       is(s_flush) {
-        when(r_flush_output_count === w_last_active_index) { w_next_state := s_idle }
+        when(i_out_ready && r_flush_output_count === w_last_active_index) { w_next_state := s_idle }
       }
     }
 
@@ -80,7 +81,7 @@ private[lis] object LISCtrl {
       r_window_full        = r_window_full,
       r_active_window_size = r_active_window_size,
       w_last_active_index  = w_last_active_index,
-      o_last               = r_flush_output_count === w_last_active_index,
+      o_last               = r_state === s_flush && r_flush_output_count === w_last_active_index,
       w_is_idle            = r_state === s_idle,
       w_is_flushing        = r_state === s_flush
     )

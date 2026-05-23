@@ -1,4 +1,4 @@
-package lis
+package opera.lis
 
 import chisel3._
 import chisel3.experimental.requireIsChiselType

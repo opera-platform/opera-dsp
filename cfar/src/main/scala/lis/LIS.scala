@@ -1,4 +1,4 @@
-package lis
+package opera.lis
 
 import chisel3._
 import dsptools.numbers._
@@ -8,7 +8,7 @@ class LIS[T <: Data: Real](val params: LISParams[T]) extends Module {
 
   val io = IO(new LISIO(params))
 
-  // Public wrapper that let us choose between different LIS implementations.
+  // Wrapper that let us choose between different LIS implementations.
   if (params.sorterType == LISType.CntBased) {
     val u_counter_sorter = Module(new CntBasedLIS(params))
     u_counter_sorter.io <> io
