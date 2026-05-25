@@ -9,13 +9,13 @@ class CFAROutput[T <: Data: Real](inputType: T, thresholdType: T, sendCut: Boole
   requireIsChiselType(inputType)
   requireIsChiselType(thresholdType)
 
-  val peak: Bool = Output(Bool())
-  val cut: Option[T] = if (sendCut) Some(Output(inputType)) else None
+  val peak : Bool = Output(Bool())
+  val cut : Option[T] = if (sendCut) Some(Output(inputType)) else None
   val threshold: T = Output(thresholdType)
 }
 
-// Internal output-queue payload. Reuses CFAROutput for the result fields and carries
-// the frame metadata (last, fftBin) alongside it through the output queue.
+// Internal output-queue payload.
+// Reuses CFAROutput for the result fields and carries the frame metadata (last, fftBin) alongside it through the output queue.
 private[cfar] class CFARQueuePayload[T <: Data: Real](params: CFARParams[T]) extends Bundle {
   val output: CFAROutput[T] = new CFAROutput(params.inputType, params.thresholdType, params.sendCut)
   val last: Bool = Bool()
@@ -39,15 +39,12 @@ class CFARIO[T <: Data: Real](val params: CFARParams[T]) extends Bundle {
   val i_guard_cells: UInt = Input(UInt(log2Ceil(params.maxGuardCells + 1).W))
 
   // Cell-Averaging family divides each side reference sum by a runtime shift.
-  val i_noise_div_shift: Option[UInt] =
-    if (isOrderedStatistic) None
-    else Some(Input(UInt(log2Ceil(log2Ceil(params.maxReferenceCells + 1)).W)))
+  val i_noise_div_shift: Option[UInt] = if (isOrderedStatistic) None
+                                        else Some(Input(UInt(log2Ceil(log2Ceil(params.maxReferenceCells + 1)).W)))
 
   // Ordered-statistic family selects a 1-based ascending rank per side.
-  val i_order_rank_left: Option[UInt] =
-    if (isOrderedStatistic) Some(Input(UInt(log2Ceil(params.maxReferenceCells + 1).W))) else None
-  val i_order_rank_right: Option[UInt] =
-    if (isOrderedStatistic) Some(Input(UInt(log2Ceil(params.maxReferenceCells + 1).W))) else None
+  val i_order_rank_left: Option[UInt]  = if (isOrderedStatistic) Some(Input(UInt(log2Ceil(params.maxReferenceCells + 1).W))) else None
+  val i_order_rank_right: Option[UInt] = if (isOrderedStatistic) Some(Input(UInt(log2Ceil(params.maxReferenceCells + 1).W))) else None
 
   val o_data = Decoupled(new CFAROutput(params.inputType, params.thresholdType, params.sendCut))
   val o_last: Bool = Output(Bool())

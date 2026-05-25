@@ -3,10 +3,9 @@ package opera.cfar
 import chisel3._
 import dsptools.numbers._
 
-// Unified CFAR top-level. The CFAR family (Cell-Averaging or Ordered-Statistic)
-// is selected at elaboration time via params.cfarType; only the chosen family's
-// hardware is generated. Runtime i_cfar_mode still selects the mode within the
-// family (CA/GOCA/SOCA, or the GOS modes).
+// CFAR top-level.
+// The CFAR family (Cell-Averaging or Ordered-Statistic) is selected at elaboration time via params.cfarType.
+// Runtime i_cfar_mode still selects the mode within the family (CA/GOCA/SOCA, or the GOS modes).
 class CFAR[T <: Data: Real: BinaryRepresentation](val params: CFARParams[T]) extends Module {
   CFARTypeSupport.requireSupportedParams(params)
 

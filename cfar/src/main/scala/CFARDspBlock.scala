@@ -84,22 +84,22 @@ abstract class CFARDspBlock[T <: Data: Real: BinaryRepresentation, D, U, E, O, B
 
     val cfar = Module(new CFAR(params))
 
-    val w_load_cfg = WireDefault(false.B)
-    val r_fft_size = RegInit(params.maxFftSize.U(fftSizeWidth.W))
+    val w_load_cfg        = WireDefault(false.B)
+    val r_fft_size        = RegInit(params.maxFftSize.U(fftSizeWidth.W))
     val r_threshold_scale = RegInit(0.U(scaleWidth.W))
-    val r_peak_grouping = RegInit(false.B)
-    val r_cfar_mode = RegInit(CFARMode.CellAveraging.U(2.W))
+    val r_peak_grouping   = RegInit(false.B)
+    val r_cfar_mode       = RegInit(CFARMode.CellAveraging.U(2.W))
     val r_reference_cells = RegInit(params.maxReferenceCells.U(referenceWidth.W))
-    val r_guard_cells = RegInit(params.maxGuardCells.U(guardWidth.W))
+    val r_guard_cells     = RegInit(params.maxGuardCells.U(guardWidth.W))
     val r_noise_div_shift = if (!isOrderedStatistic) {
       Some(RegInit(log2Ceil(params.maxReferenceCells).U(noiseShiftWidth.W)))
     } else {
       None
     }
-    val r_order_rank_left = if (isOrderedStatistic) Some(RegInit(1.U(referenceWidth.W))) else None
+    val r_order_rank_left  = if (isOrderedStatistic) Some(RegInit(1.U(referenceWidth.W))) else None
     val r_order_rank_right = if (isOrderedStatistic) Some(RegInit(1.U(referenceWidth.W))) else None
-    val r_log_mode = if (params.runtimeLogMode) Some(RegInit(params.logMode.B)) else None
-    val r_edge_policy = if (params.runtimeEdgePolicy) Some(RegInit(params.edgePolicy.U(edgePolicyWidth.W))) else None
+    val r_log_mode         = if (params.runtimeLogMode) Some(RegInit(params.logMode.B)) else None
+    val r_edge_policy      = if (params.runtimeEdgePolicy) Some(RegInit(params.edgePolicy.U(edgePolicyWidth.W))) else None
 
     cfar.io.i_data.valid := in.valid
     cfar.io.i_data.bits  := in.bits.data(inputWidth - 1, 0).asTypeOf(params.inputType)
