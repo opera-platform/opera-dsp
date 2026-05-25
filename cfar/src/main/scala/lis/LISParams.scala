@@ -19,7 +19,7 @@ case class LISParams[T <: Data: Real](
 ) {
 
   requireIsChiselType(dataType, s"($dataType) must be chisel type")
-  require(maxWindowSize > 1, s"Sorter size must be > 1")
+  require(maxWindowSize > 0, s"Sorter size must be > 0")
 
   def checkSorterType(): Unit =
     require(
