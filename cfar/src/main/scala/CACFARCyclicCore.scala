@@ -30,7 +30,7 @@ private[cfar] class CACFARCyclicCore[T <: Data: Real: BinaryRepresentation](val 
   frame_replay.io.i_order_rank_right  := 1.U
 
   // Convert the replay stream into one aligned reference/CUT window per FFT bin.
-  private val window_provider = Module(new CFARWindowProvider(params))
+  private val window_provider = Module(new CyclicWindowProvider(params))
   window_provider.io.i_data <> frame_replay.io.o_data
   window_provider.io.i_last := frame_replay.io.o_last
   window_provider.io.i_cfg  := frame_replay.io.o_cfg

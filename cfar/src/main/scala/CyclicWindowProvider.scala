@@ -5,8 +5,8 @@ import chisel3.experimental.requireIsChiselType
 import chisel3.util._
 import dsptools.numbers.Real
 
-private[cfar] class CFARWindowPayload[T <: Data: Real](val params: CFARParams[T]) extends Bundle {
-  
+private[cfar] class CyclicWindowPayload[T <: Data: Real](val params: CFARParams[T]) extends Bundle {
+
   val fftBin      = UInt(log2Ceil(params.maxFftSize).W)                       // Original-frame bin index for the current CUT.
   val cut         = params.inputType.cloneType                                // Cell under test, centered in the active sliding window.
   val leftRefs    = Vec(params.maxReferenceCells, params.inputType.cloneType) // Left-side reference cells; inactive lanes are zeroed.
@@ -18,7 +18,7 @@ private[cfar] class CFARWindowPayload[T <: Data: Real](val params: CFARParams[T]
   val last        = Bool()                                                    // Final CUT payload for this frame.
 }
 
-private[cfar] class CFARWindowProvider[T <: Data: Real](val params: CFARParams[T]) extends Module {
+private[cfar] class CyclicWindowProvider[T <: Data: Real](val params: CFARParams[T]) extends Module {
   CFARTypeSupport.requireSupportedParams(params)
   requireIsChiselType(params.inputType)
 
@@ -35,7 +35,7 @@ private[cfar] class CFARWindowProvider[T <: Data: Real](val params: CFARParams[T
     val i_last = Input(Bool())
     val i_cfg  = Input(new CFARRuntimeConfig(params))
 
-    val o_window = Decoupled(new CFARWindowPayload(params))
+    val o_window = Decoupled(new CyclicWindowPayload(params))
   })
 
   // Sliding-window state plus a one-entry output hold register.
@@ -44,7 +44,7 @@ private[cfar] class CFARWindowProvider[T <: Data: Real](val params: CFARParams[T
   private val r_replay_sample_count = RegInit(0.U(replayCountWidth.W))
   private val r_output_count        = RegInit(0.U(outputCountWidth.W))
   private val r_output_valid        = RegInit(false.B)
-  private val r_output_payload      = Reg(new CFARWindowPayload(params))
+  private val r_output_payload      = Reg(new CyclicWindowPayload(params))
 
   private val w_output_fire = r_output_valid && io.o_window.ready
   private val w_output_done = w_output_fire && r_output_payload.last
@@ -77,7 +77,7 @@ private[cfar] class CFARWindowProvider[T <: Data: Real](val params: CFARParams[T
 
   // Extract references, neighbors, CUT, and metadata for the current output bin.
   private val w_right_reference_start = w_reference_cells +& (w_guard_cells << 1) +& 1.U
-  private val w_payload = Wire(new CFARWindowPayload(params))
+  private val w_payload = Wire(new CyclicWindowPayload(params))
   w_payload.fftBin      := r_output_count(fftBinWidth - 1, 0)
   w_payload.cut         := selectWindow(w_next_window, w_edge_span)
   w_payload.prev        := selectWindow(w_next_window, w_edge_span - 1.U)
