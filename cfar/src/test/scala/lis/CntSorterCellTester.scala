@@ -3,13 +3,13 @@ package opera.lis
 import chisel3._
 import chiseltest._
 import dsptools.numbers.Real
-import opera.cfar.CFARTestConfig
+import opera.cfar.TestConfig
 
 trait CntSorterCellTester { this: ChiselScalatestTester =>
   import CntSorterCellModels._
 
   protected def checkCntSorterCellCtrlTruthTable(): Unit = {
-    test(new CntSorterCellCtrl).withAnnotations(CFARTestConfig.annotations) { dut =>
+    test(new CntSorterCellCtrl).withAnnotations(TestConfig.annotations) { dut =>
       for {
         currentLessThanInput <- Seq(false, true)
         leftLessThanInput    <- Seq(false, true)
@@ -36,7 +36,7 @@ trait CntSorterCellTester { this: ChiselScalatestTester =>
         dut.io.o_shift_from_right.expect(expected.shiftFromRight.B)
         dut.io.o_reset_fifo_position.expect(expected.resetFifoPosition.B)
 
-        if (CFARTestConfig.verbose) {
+        if (TestConfig.verbose) {
           println(
             s"counter sorter cellCtrl curr=$currentLessThanInput left=$leftLessThanInput right=$rightLessThanInput " +
               s"remove=$removeCurrent discardFromRight=$discardFromRight expected=$expected"
@@ -58,7 +58,7 @@ trait CntSorterCellTester { this: ChiselScalatestTester =>
       index      = index
     )
 
-    test(new CntSorterCell(params, index)).withAnnotations(CFARTestConfig.annotations) { dut =>
+    test(new CntSorterCell(params, index)).withAnnotations(TestConfig.annotations) { dut =>
       val prime = CntSorterCellStepInput(
         enableSort       = false,
         state            = 0,
@@ -124,7 +124,7 @@ trait CntSorterCellTester { this: ChiselScalatestTester =>
       dut.io.o_discard_to_left.expect(expected.discardToLeft.get.B)
     }
 
-    if (CFARTestConfig.verbose) {
+    if (TestConfig.verbose) {
       println(
         s"CntSorterCell $label expected cell=${expected.cellState} rightOut=${expected.dataToRight} " +
           s"remove=${expected.removeCurrent} update=${expected.updateCell} " +

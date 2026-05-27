@@ -3,7 +3,7 @@ package opera.lis
 import chisel3._
 import chiseltest._
 import dsptools.numbers.Real
-import opera.cfar.CFARTestConfig
+import opera.cfar.TestConfig
 
 trait RegSorterCellAndNetworkTester { this: ChiselScalatestTester =>
   import RegSorterModels._
@@ -26,7 +26,7 @@ trait RegSorterCellAndNetworkTester { this: ChiselScalatestTester =>
     )
 
     (1 to size + 1).foreach { index =>
-      test(new RegSorterCell(params, index)).withAnnotations(CFARTestConfig.annotations) { dut =>
+      test(new RegSorterCell(params, index)).withAnnotations(TestConfig.annotations) { dut =>
         scenarios.foreach { scenario =>
           val trace = RegSorterNetworkModel(
             scenario.sortedData,
@@ -35,7 +35,7 @@ trait RegSorterCellAndNetworkTester { this: ChiselScalatestTester =>
           )
           val cell = trace.cell(index)
 
-          if (CFARTestConfig.verbose) {
+          if (TestConfig.verbose) {
             println(
               s"RegSorterCell $label/${scenario.label} index=$index sorted=${scenario.sortedData.mkString("[", ", ", "]")} " +
                 s"rm=${scenario.removeData} insert=${scenario.insertData} next=${trace.nextSortedData.mkString("[", ", ", "]")}"
@@ -74,7 +74,7 @@ trait RegSorterCellAndNetworkTester { this: ChiselScalatestTester =>
       sorterType    = LISType.RegBased
     )
 
-    test(new RegSorterNetwork(params)).withAnnotations(CFARTestConfig.annotations) { dut =>
+    test(new RegSorterNetwork(params)).withAnnotations(TestConfig.annotations) { dut =>
       scenarios.foreach { scenario =>
         val trace = RegSorterNetworkModel(
           scenario.sortedData,
@@ -91,7 +91,7 @@ trait RegSorterCellAndNetworkTester { this: ChiselScalatestTester =>
           dut.io.o_next_sorted_data(index).expect(LISStreamingSorterTester.literalFor(value, dataType))
         }
 
-        if (CFARTestConfig.verbose) {
+        if (TestConfig.verbose) {
           println(s"RegSorterNetwork $label/${scenario.label} next=${trace.nextSortedData.mkString("[", ", ", "]")}")
         }
         dut.clock.step()

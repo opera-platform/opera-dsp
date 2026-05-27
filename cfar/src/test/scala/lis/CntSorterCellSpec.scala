@@ -3,13 +3,13 @@ package opera.lis
 import chisel3._
 import chiseltest._
 import fixedpoint._
-import opera.cfar.CFARTestConfigSupport
+import opera.cfar.TestConfigSupport
 import org.scalatest.flatspec.AnyFlatSpec
 
 class CntSorterCellSpec
     extends AnyFlatSpec
     with ChiselScalatestTester
-    with CFARTestConfigSupport
+    with TestConfigSupport
     with CntSorterCellTester {
   behavior of "counter sorter cells"
 

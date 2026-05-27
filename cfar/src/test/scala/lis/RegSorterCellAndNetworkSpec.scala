@@ -3,13 +3,13 @@ package opera.lis
 import chisel3._
 import chiseltest._
 import fixedpoint._
-import opera.cfar.CFARTestConfigSupport
+import opera.cfar.TestConfigSupport
 import org.scalatest.flatspec.AnyFlatSpec
 
 class RegSorterCellAndNetworkSpec
     extends AnyFlatSpec
     with ChiselScalatestTester
-    with CFARTestConfigSupport
+    with TestConfigSupport
     with RegSorterCellAndNetworkTester {
   behavior of "register sorter cells and network"
 
