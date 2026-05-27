@@ -98,7 +98,7 @@ This module includes I/Os provided by the `DspBlock <https://chipyard.readthedoc
 SystemVerilog Generation
 ------------------------
 
-You can generate SystemVerilog from the Windowing block using either AXI4 or TL as the memory-mapped control interface.
+You can generate SystemVerilog from the Magnitude block using either AXI4 or TL as the memory-mapped control interface.
 
 Use the following commands in the project root folder:
 
@@ -111,7 +111,7 @@ Use the following commands in the project root folder:
 
 This generates SystemVerilog code in the ``./rtl/MagnitudeAXI4`` folder for the AXI4 variant or ``./rtl/MagnitudeTL`` for the TileLink variant.
 
-Additionally, you can pass the path to a JSON file containing Windowing parameters, for example:
+Additionally, you can pass the path to a JSON file containing Magnitude parameters, for example:
 
 .. code-block:: bash
 

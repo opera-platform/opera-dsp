@@ -1,0 +1,29 @@
+{
+  "address": {
+    "base": "0x00002000",
+    "mask": "0x000000FF"
+  },
+  "parameters": {
+    "beatBytes"          : 4,
+    "inputWidth"         : 16,
+    "inputBinPoint"      : 14,
+    "thresholdWidth"     : 16,
+    "thresholdBinPoint"  : 14,
+    "scaleWidth"         : 16,
+    "scaleBinPoint"      : 14,
+    "cfarType"           : "CellAveraging",
+    "lisType"            : "CntBased",
+    "maxReferenceCells"  : 16,
+    "maxGuardCells"      : 4,
+    "maxFftSize"         : 1024,
+    "sendCut"            : true,
+    "logMode"            : false,
+    "runtimeLogMode"     : false,
+    "edgePolicy"         : "OneSidedAverage",
+    "runtimeEdgePolicy"  : false,
+    "retiming"           : false,
+    "addPipeStages"      : 0,
+    "mulPipeStages"      : 0,
+    "minSRAMDepth"       : 8
+  }
+}
