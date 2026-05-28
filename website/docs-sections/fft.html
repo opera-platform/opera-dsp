@@ -5,6 +5,29 @@
   and AXI4 or TileLink memory-mapped wrappers.
 </p>
 <p>
-  For detailed information about parameters, registers, RTL generation, and tests,
-  see the <a href="docs/fft/index.html">FFT Sphinx documentation</a>.
+  <a href="docs/fft/index.html">→ Full FFT Documentation</a>
+</p>
+
+<h3>RTL Generation</h3>
+<pre><code><span class="cm"># AXI4</span>
+$ make rtl_fft_axi4
+
+<span class="cm"># TileLink</span>
+$ make rtl_fft_tl
+
+<span class="cm"># All variants</span>
+$ make rtl_fft_all</code></pre>
+
+<h3>Tests</h3>
+<pre><code><span class="cm"># AXI4</span>
+$ make test_fft_axi4
+
+<span class="cm"># TileLink</span>
+$ make test_fft_tl
+
+<span class="cm"># Full FFT suite</span>
+$ make test_fft_all</code></pre>
+<p>
+  The full suite covers memory-mapped wrappers, bit reversal, SDF stages,
+  FFT models, hardware/model comparisons, floating-point comparisons, and SQNR.
 </p>

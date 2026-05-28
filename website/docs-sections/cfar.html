@@ -1,4 +1,33 @@
 <h2 id="cfar">CFAR Block</h2>
-<div class="callout">
-  <p><strong>Status:</strong> Work in Progress. This block is currently under development.</p>
-</div>
+<p>
+  The CFAR block implements 1D Constant False Alarm Rate target detection for
+  range spectra. It supports Cell-Averaging and Generalized Ordered-Statistic
+  CFAR modes, configurable guard/reference windows, edge policies, peak grouping,
+  and AXI4 or TileLink memory-mapped wrappers.
+</p>
+<p>
+  <a href="docs/cfar/index.html">→ Full CFAR Documentation</a>
+</p>
+
+<h3>RTL Generation</h3>
+<pre><code><span class="cm"># AXI4</span>
+$ make rtl_cfar_axi4
+
+<span class="cm"># TileLink</span>
+$ make rtl_cfar_tl
+
+<span class="cm"># Both variants</span>
+$ make rtl_cfar_all</code></pre>
+
+<h3>Tests</h3>
+<pre><code><span class="cm"># Memory-mapped wrappers</span>
+$ make test_cfar_axi4
+$ make test_cfar_tl
+
+<span class="cm"># Full CFAR suite</span>
+$ make test_cfar_all</code></pre>
+<p>
+  The full suite covers direct CFAR behavior, CA/GOS families, delay cells,
+  memory-mapped AXI4 and TileLink wrappers, window providers, rank providers,
+  and linear insertion sorter implementations.
+</p>

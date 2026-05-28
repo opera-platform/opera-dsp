@@ -4,6 +4,7 @@ dependencies
 # Generated documentation
 docs/*/build
 docs/*/*.pdf
+website/docs/
 # SBT files
 preprocessing/target
 project/project
