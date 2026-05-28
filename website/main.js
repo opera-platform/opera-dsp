@@ -417,9 +417,9 @@
     return fetchResource(path, 'text');
   }
 
-  // Keeps fetch error handling in one place for JSON and text requests.
+  // Revalidates dynamic JSON/HTML partials so docs/news updates are visible.
   function fetchResource(path, responseType) {
-    return fetch(path).then(function (response) {
+    return fetch(path, { cache: 'no-cache' }).then(function (response) {
       if (!response.ok) {
         throw new Error(response.statusText);
       }
