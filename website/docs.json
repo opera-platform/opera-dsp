@@ -27,12 +27,6 @@
         { "title": "FFT", "href": "docs/fft/index.html" },
         { "title": "CFAR", "href": "docs/cfar/index.html" }
       ]
-    },
-    {
-      "label": "Resources",
-      "links": [
-        { "title": "Building Docs", "href": "#documentation" }
-      ]
     }
   ],
   "sections": [
@@ -43,7 +37,6 @@
     "windowing",
     "magnitude",
     "fft",
-    "cfar",
-    "documentation"
+    "cfar"
   ]
 }
