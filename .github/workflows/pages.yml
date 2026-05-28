@@ -56,6 +56,8 @@ jobs:
         run: |
           rm -rf website/docs
           mkdir -p website/docs
+          make docs_cfar_html
+          make docs_fft_html
           make docs_magnitude_html
           make docs_preprocessing_html
           make docs_windowing_html
