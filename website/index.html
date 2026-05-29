@@ -97,14 +97,30 @@ $ cd opera-dsp
 <span class="cm"># Clone required submodules (rocket-chip, dsptools, rocket-dsp-utils)</span>
 $ make clone_dependencies
 
-<span class="cm"># Generate RTL for the Windowing block (AXI4)</span>
+<span class="cm"># Generate AXI4 RTL for a block</span>
+$ make rtl_preprocessing_axi4
 $ make rtl_windowing_axi4
+$ make rtl_magnitude_axi4
+$ make rtl_fft_axi4
+$ make rtl_cfar_axi4
 
-<span class="cm"># Run PreProcessing tests</span>
+<span class="cm"># Generate TileLink RTL for a block</span>
+$ make rtl_preprocessing_tl
+$ make rtl_windowing_tl
+$ make rtl_magnitude_tl
+$ make rtl_fft_tl
+$ make rtl_cfar_tl
+
+<span class="cm"># Run focused wrapper tests</span>
 $ make test_preprocessing
-
-<span class="cm"># Generate documentation</span>
-$ make docs_windowing_html</code></pre>
+$ make test_windowing_functions_axi4
+$ make test_windowing_functions_tl
+$ make test_magnitude_axi4
+$ make test_magnitude_tl
+$ make test_fft_axi4
+$ make test_fft_tl
+$ make test_cfar_axi4
+$ make test_cfar_tl</code></pre>
       </div>
     </div>
   </section>
