@@ -7,6 +7,10 @@
 # 
 The OPERA-DSP project goal is to develop an open-source FMCW radar DSP hardware library, making radar signal processing more accessible to researchers and developers. It (will) provide essential IP cores for FMCW radar signal processing, including windowing functions, Fast Fourier Transform (FFT), magnitude computation, and Constant False Alarm Rate (CFAR) detection. 
 
+## Project website
+
+The project website is available at [opera-platform.github.io/opera-dsp](https://opera-platform.github.io/opera-dsp/). It includes the project overview, news, and generated block documentation.
+
 ## Dependencies
 
 ### OpenJDK and SBT
@@ -82,7 +86,7 @@ For detailed information about the PreProcessing block, including instructions f
 To generate the documentation:
 
 ```bash
-# For HTML (output in ./docs/preprocessing/build/html)
+# For HTML (output in ./website/docs/preprocessing)
 $ make docs_preprocessing_html
 # For PDF (output in ./docs/preprocessing/)
 $ make docs_preprocessing_pdf
@@ -125,7 +129,7 @@ For detailed information about the Windowing block, including instructions for R
 To generate the documentation:
 
 ```bash
-# For HTML (output in ./docs/windowing/build/html)
+# For HTML (output in ./website/docs/windowing)
 $ make docs_windowing_html
 # For PDF (output in ./docs/windowing/)
 $ make docs_windowing_pdf
@@ -172,7 +176,7 @@ For detailed information about the Magnitude block, including instructions for R
 To generate the documentation:
 
 ```bash
-# For HTML (output in ./docs/log-magnitude/build/html)
+# For HTML (output in ./website/docs/log-magnitude)
 $ make docs_magnitude_html
 # For PDF (output in ./docs/log-magnitude/)
 $ make docs_magnitude_pdf
@@ -210,8 +214,128 @@ By default 1368 tests will be run for both AXI4 and TileLink variants of the Mag
 
 ## FFT block
 
-Work in Progress
+The FFT block implements a streaming Single-path Delay-Feedback (SDF) Fast Fourier Transform for FMCW radar DSP chains. It supports Radix-2 and Radix-2^2 cores, DIT/DIF decimation modes, optional bit reversal, runtime FFT size and direction control, per-stage scaling and overflow status, SRAM-backed delay lines, and AXI4 or TileLink memory-mapped wrappers.
+
+### Documentation
+
+For detailed information about the FFT block, including instructions for RTL generation and test execution, refer to the documentation in the [/docs/fft](/docs/fft) folder.
+
+To generate the documentation:
+
+```bash
+# For HTML (output in ./website/docs/fft)
+$ make docs_fft_html
+# For PDF (output in ./docs/fft/)
+$ make docs_fft_pdf
+```
+
+### RTL generation
+
+To generate AXI4, TileLink, or BitReverse variants of the FFT block, use the following commands in the project root directory:
+
+```bash
+# AXI4 Version
+$ make rtl_fft_axi4
+# TileLink Version
+$ make rtl_fft_tl
+```
+
+The generated SystemVerilog code will be located in the `./rtl` folder.
+
+To pass a JSON configuration file directly to the AXI4 or TileLink generator:
+
+```bash
+# AXI4 Version
+$ sbt "project fft; runMain opera.fft.AXI4App fft/src/main/resources/parameters.json"
+# TileLink Version
+$ sbt "project fft; runMain opera.fft.TLApp fft/src/main/resources/parameters.json"
+```
+
+### Tests
+
+To run the most common FFT tests, use the following commands in the project root directory:
+
+```bash
+# AXI4 memory-mapped wrapper
+$ make test_fft_axi4
+# TileLink memory-mapped wrapper
+$ make test_fft_tl
+# For all FFT tests
+$ make test_fft_all
+```
+
+Test results will be stored in the `./fft/test_run_dir` folder. The tests can be found in the [/fft/src/test/scala](fft/src/test/scala) folder.
+
+FFT tests accept optional ScalaTest configuration flags after `--`. Useful options include `-Dfft.verbose=true`, `-Dfft.plot=true`, `-Dfft.randomReadyValid=true`, and `-Dfft.nonParallel=N`. The `fft.nonParallel` option makes tests with FFT sizes greater than or equal to `N` use non-parallel Verilator output; it defaults to `256`.
+
+For example:
+
+```bash
+$ sbt -J-Xms2048M -J-Xmx8G "project fft; testOnly opera.fft.FFTvsFloatingPointSpec -- -Dfft.randomReadyValid=true -Dfft.nonParallel=64 -z \"size = 64\""
+```
 
 ## CFAR block
 
-Work in Progress
+The CFAR block implements 1D Constant False Alarm Rate target detection for range spectra. For each Cell Under Test (CUT), it estimates local noise from neighboring reference cells, scales the estimate into an adaptive threshold, and reports a peak when the CUT crosses that threshold.
+
+The block supports Cell-Averaging CFAR modes (CA-CFAR, GOCA, and SOCA), Generalized Ordered-Statistic CFAR modes (GOS-CA, GOS-GO, and GOS-SO), runtime FFT size and window configuration, optional log-domain thresholding, edge policies, peak grouping, and AXI4 or TileLink memory-mapped wrappers.
+
+### Documentation
+
+For detailed information about the CFAR block, including instructions for RTL generation and test execution, refer to the documentation in the [/docs/cfar](/docs/cfar) folder.
+
+To generate the documentation:
+
+```bash
+# For HTML (output in ./website/docs/cfar)
+$ make docs_cfar_html
+# For PDF (output in ./docs/cfar/)
+$ make docs_cfar_pdf
+```
+
+### RTL generation
+
+To generate AXI4 or TileLink variants of the CFAR block, use the following commands in the project root directory:
+
+```bash
+# AXI4 Version
+$ make rtl_cfar_axi4
+# TileLink Version
+$ make rtl_cfar_tl
+# For both AXI4 and TileLink variants
+$ make rtl_cfar_all
+```
+
+The generated SystemVerilog code will be located in the `./rtl` folder.
+
+To pass a JSON configuration file directly to the AXI4 or TileLink generator:
+
+```bash
+# AXI4 Version
+$ sbt "project cfar; runMain opera.cfar.AXI4App cfar/src/main/resources/parameters.json"
+# TileLink Version
+$ sbt "project cfar; runMain opera.cfar.TLApp cfar/src/main/resources/parameters.json"
+```
+
+### Tests
+
+To run the most common CFAR tests, use the following commands in the project root directory:
+
+```bash
+# AXI4 memory-mapped wrapper
+$ make test_cfar_axi4
+# TileLink memory-mapped wrapper
+$ make test_cfar_tl
+# For all CFAR tests
+$ make test_cfar_all
+```
+
+Test results will be stored in the `./cfar/test_run_dir` folder. The tests can be found in the [/cfar/src/test/scala](cfar/src/test/scala) folder.
+
+CFAR tests accept optional ScalaTest configuration flags after `--`. Useful options include `-Dcfar.verbose=true`, `-Dcfar.plot=true`, and `-Dcfar.randomReadyValid=true`.
+
+For example:
+
+```bash
+$ sbt -J-Xms2048M -J-Xmx8G "project cfar; testOnly opera.cfar.MemoryMappedAXI4CFARSpec -- -Dcfar.verbose=true"
+```
