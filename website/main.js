@@ -151,7 +151,7 @@
 
   // Reveals home-page sections once as they enter the viewport.
   function initScrollReveal() {
-    var targets = Array.prototype.slice.call(document.querySelectorAll('.feature-card, .code-block, .cta'));
+    var targets = Array.prototype.slice.call(document.querySelectorAll('.feature-card, .code-block, .funding-panel, .cta'));
 
     if (!targets.length) {
       return;
