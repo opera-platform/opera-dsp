@@ -2,7 +2,6 @@ package opera.cfar
 
 import chisel3._
 import chiseltest.ChiselScalatestTester
-import chiseltest.simulator.VerilatorFlags
 import dsptools.numbers._
 import opera.lis.LISType
 import org.scalatest.TestSuite
@@ -15,7 +14,6 @@ private[cfar] final case class CFARTestWindowCase(fftSize: Int, referenceCells: 
 
 trait TestUtils extends TestConfigSupport { this: ChiselScalatestTester with TestSuite =>
   protected def annotations = TestConfig.annotations
-  protected def splitOutputAnnotations = TestConfig.annotations :+ VerilatorFlags(Seq("--output-split", "0"))
   protected val defaultFftSize = 32
   protected val allEdgePolicies: Seq[Int] = Seq(
     CFAREdgePolicy.SuppressEdges,

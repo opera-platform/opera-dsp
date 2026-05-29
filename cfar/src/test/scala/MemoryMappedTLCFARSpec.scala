@@ -4,7 +4,7 @@ class MemoryMappedTLCFARSpec extends MemoryMappedCFARSpec("MemoryMappedTLCFAR", 
   protected def runMemoryMappedCheck(params: CFARParams[fixedpoint.FixedPoint], mmCheck: MemoryMappedCFARCheck): Unit = {
     val lazyDut = MemoryMappedCFARDutFactory.tlDut(address, params, beatBytes)
     test(lazyDut.module)
-      .withAnnotations(splitOutputAnnotations)
+      .withAnnotations(annotations)
       .runPeekPoke(_ => new MemoryMappedTLCFARTester(lazyDut, params, address, beatBytes, mmCheck))
   }
 }

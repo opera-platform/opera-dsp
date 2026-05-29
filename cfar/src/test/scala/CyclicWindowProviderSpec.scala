@@ -7,8 +7,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 class CyclicWindowProviderSpec extends AnyFlatSpec with ChiselScalatestTester with TestUtils {
   behavior of "CyclicWindowProvider"
 
-  override protected def annotations = splitOutputAnnotations
-
   private def checkReplay(size: Int, referenceCells: Int, guardCells: Int, maxReferenceCells: Int, maxGuardCells: Int): Unit = {
     val params = CyclicWindowProviderTester.paramsForReplay(size, maxReferenceCells, maxGuardCells)
 

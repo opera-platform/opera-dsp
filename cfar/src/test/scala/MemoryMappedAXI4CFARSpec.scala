@@ -4,7 +4,7 @@ class MemoryMappedAXI4CFARSpec extends MemoryMappedCFARSpec("MemoryMappedAXI4CFA
   protected def runMemoryMappedCheck(params: CFARParams[fixedpoint.FixedPoint], mmCheck: MemoryMappedCFARCheck): Unit = {
     val lazyDut = MemoryMappedCFARDutFactory.axi4Dut(address, params, beatBytes)
     test(lazyDut.module)
-      .withAnnotations(splitOutputAnnotations)
+      .withAnnotations(annotations)
       .runPeekPoke(_ => new MemoryMappedAXI4CFARTester(lazyDut, params, address, beatBytes, mmCheck))
   }
 }

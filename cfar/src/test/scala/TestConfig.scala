@@ -1,6 +1,7 @@
 package opera.cfar
 
 import chiseltest.{VerilatorBackendAnnotation, WriteVcdAnnotation}
+import chiseltest.simulator.VerilatorFlags
 import firrtl2.options.TargetDirAnnotation
 import org.scalatest.{Args, Outcome, Status, TestSuite, TestSuiteMixin}
 
@@ -9,7 +10,13 @@ import java.io.File
 object TestConfig {
   private[cfar] val optionNames = Seq("verbose", "plot", "randomReadyValid")
   @volatile private[cfar] var scalaTestOptions: Map[String, String] = Map.empty
-  def annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation, TargetDirAnnotation(testDirectory.getPath))
+  def annotations =
+    Seq(
+      WriteVcdAnnotation,
+      VerilatorBackendAnnotation,
+      TargetDirAnnotation(testDirectory.getPath),
+      VerilatorFlags(Seq("--output-split", "0"))
+    )
   private val currentTestName = new ThreadLocal[String] {
     override def initialValue(): String = "unknown-test"
   }

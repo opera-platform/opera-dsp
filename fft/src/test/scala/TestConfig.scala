@@ -8,6 +8,7 @@ import org.scalatest.{Args, Outcome, Status, TestSuite, TestSuiteMixin}
 import java.io.File
 
 object TestConfig {
+  private val defaultNonParallelFftSize = 256
   @volatile private var scalaTestOptions: Map[String, String] = Map.empty
   private val currentTestName = new ThreadLocal[String] {
     override def initialValue(): String = "unknown-test"
@@ -53,11 +54,10 @@ object TestConfig {
   def randomReadyValid: Boolean = flag("randomReadyValid")
   def annotations = Seq(WriteVcdAnnotation, VerilatorBackendAnnotation, TargetDirAnnotation(testDirectory.getPath))
   def nonParallelVerilatorAnnotations = annotations :+ VerilatorFlags(Seq("--output-split", "0"))
-  def annotationsForFftSize(size: Int) =
-    intOption("nonParallel") match {
-      case Some(threshold) if size >= threshold => nonParallelVerilatorAnnotations
-      case _                                    => annotations
-    }
+  def annotationsForFftSize(size: Int) = {
+    val nonParallelThreshold = intOption("nonParallel").getOrElse(defaultNonParallelFftSize)
+    if (size >= nonParallelThreshold) nonParallelVerilatorAnnotations else annotations
+  }
 
   def withTestName[T](name: String)(body: => T): T = {
     val previous = currentTestName.get()
