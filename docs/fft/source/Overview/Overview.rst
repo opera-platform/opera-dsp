@@ -313,7 +313,7 @@ The following ScalaTest parameters can be passed after ``--``:
   Writes FFT output plots into the test output directory.
 
 - ``-Dfft.nonParallel=N``:
-  Uses non-parallel Verilator output for FFT sizes greater than or equal to ``N``.
+  Uses non-parallel Verilator output for FFT sizes greater than or equal to ``N``. Defaults to ``256``.
 
 - ``-Dfft.randomReadyValid=true``:
   Enables randomized input ``valid`` and output ``ready`` in supported FFT stream tests.
