@@ -1,9 +1,30 @@
 [
   {
+    "date": "May 29, 2026",
+    "title": "OPERA-DSP v1.0 Released",
+    "url": "https://github.com/opera-platform/opera-dsp/releases/tag/v1.0",
+    "body": "Version 1.0 adds two major IP cores to the library: a streaming FFT block and a Constant False Alarm Rate (CFAR) target detection block. Both ship with functional models, fixed-point test suites, Sphinx documentation, and AXI4 and TileLink memory-mapped wrappers. See the release notes on GitHub for full details.",
+    "tag": "Release"
+  },
+  {
+    "date": "May 2026",
+    "title": "CFAR Block - CA-CFAR & Ordered-Statistic Detection",
+    "url": "https://github.com/opera-platform/opera-dsp/releases/tag/v1.0",
+    "body": "The CFAR block supports Cell-Averaging modes (CA-CFAR, GOCA, SOCA) and Generalized Ordered-Statistic modes (GOS-CA, GOS-GO, GOS-SO) built on a configurable Linear Insertion Sorter, with runtime FFT size and window configuration, optional log-domain thresholding, edge policies, peak grouping, and both AXI4 and TileLink interfaces.",
+    "tag": "Feature"
+  },
+  {
+    "date": "May 2026",
+    "title": "FFT Block - Streaming SDF Radix-2 / Radix-2^2",
+    "url": "https://github.com/opera-platform/opera-dsp/releases/tag/v1.0",
+    "body": "The FFT block implements a streaming Single-path Delay-Feedback (SDF) Fast Fourier Transform for FMCW radar DSP chains. It supports Radix-2 and Radix-2^2 cores, DIT/DIF decimation modes, optional bit reversal, runtime FFT size and direction control, per-stage scaling with overflow status, SRAM-backed delay lines, and both AXI4 and TileLink interfaces.",
+    "tag": "Feature"
+  },
+  {
     "date": "July 16, 2025",
     "title": "OPERA-DSP v0.3 Released",
     "url": "https://github.com/opera-platform/opera-dsp/releases/tag/v0.3",
-    "body": "The latest release of OPERA-DSP is now available. Version 0.3 brings continued improvements to the core IP blocks and build system. Check the release notes on GitHub for full details on what's changed.",
+    "body": "Version 0.3 brings continued improvements to the core IP blocks and build system. Check the release notes on GitHub for full details on what's changed.",
     "tag": "Release"
   },
   {

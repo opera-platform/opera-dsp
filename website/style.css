@@ -262,6 +262,13 @@ button:focus-visible {
   padding: 5px 14px;
   border-radius: 100px;
   margin-bottom: 28px;
+  text-decoration: none;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.hero-badge:hover {
+  color: var(--text);
+  border-color: var(--green);
 }
 
 .hero-tagline {
