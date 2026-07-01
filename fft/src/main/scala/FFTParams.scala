@@ -53,6 +53,7 @@ case object Radix22 extends SDFRadix {
  * @param directionReg       Enables runtime-selectable transform direction through `i_fft_or_ifft`.
  * @param dspMul4            Uses the four-real-multiplier complex multiplier implementation.
  * @param useBitReverse      Inserts top-level bit reversal for natural-order streaming at both ends.
+ * @param drainOnLastReg     Enables an optional input that zero-drains one finite frame after `i_last`.
  * @param minSRAMdepth       Delay lines deeper than this threshold use SRAM-backed storage.
  * @param singlePortSRAM     Uses single-port SRAM for eligible delay lines and bit-reversal buffers.
  * @param stageTrimTypes     Optional per-stage trim mode for SDF butterfly scaling.
@@ -76,6 +77,7 @@ case class FFTParams(
   directionReg:      Boolean = false,
   dspMul4:           Boolean = false,
   useBitReverse:     Boolean = false,
+  drainOnLastReg:    Boolean = false,
   minSRAMdepth:      Int = 0,
   singlePortSRAM:    Boolean = false,
   stageTrimTypes:    Seq[TrimType] = Seq.empty,

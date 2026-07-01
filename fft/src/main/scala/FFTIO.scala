@@ -30,6 +30,7 @@ class FFTIO(params: FFTParams) extends Bundle {
   val i_size: Option[UInt] = if (params.runTime) Some(Input(UInt(log2Ceil(params.fftSize).W))) else None
   val i_divBy2: Option[Vec[Bool]] = if (params.divBy2Reg) Some(Input(Vec(log2Ceil(params.fftSize), Bool()))) else None
   val i_fft_or_ifft: Option[Bool] = if (params.directionReg) Some(Input(Bool())) else None
+  val i_drain_on_last: Option[Bool] = if (params.drainOnLastReg) Some(Input(Bool())) else None
   // Status
   val o_overflow: Option[Vec[Bool]] = if (params.overflowReg) Some(Output(Vec(log2Ceil(params.fftSize), Bool()))) else None
 }

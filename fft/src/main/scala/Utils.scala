@@ -147,6 +147,7 @@ object ParseParameters {
         directionReg     = (parameters \ "directionReg").get.as[Boolean],
         dspMul4          = (parameters \ "dspMul4").get.as[Boolean],
         useBitReverse    = (parameters \ "useBitReverse").get.as[Boolean],
+        drainOnLastReg   = (parameters \ "drainOnLastReg").asOpt[Boolean].getOrElse(false),
         minSRAMdepth     = (parameters \ "minSRAMdepth").get.as[Int],
         singlePortSRAM   = (parameters \ "singlePortSRAM").get.as[Boolean],
         stageTrimTypes   = (parameters \ "stageTrimTypes").get.as[Seq[String]].map(parseTrimType),

@@ -7,6 +7,8 @@ import chisel3.util._
 import dsptools.numbers._
 import fixedpoint._
 
+// TODO: config/zero drain should be handled in a more elegant way, e.g. by using a "drain" signal to the core
+
 /**
  * Top-level streaming single-path delay-feedback FFT.
  *
@@ -34,11 +36,12 @@ class FFT(val params: FFTParams) extends Module {
   override def desiredName: String =
     s"FFT_size_${params.fftSize}_width_${params.inDataType.real.getWidth}_radix_${params.sdfRadix.label}_bitreverse_$bitReverseSuffix"
 
-  private val rawCfgLoad      = io.i_load_cfg.getOrElse(false.B)
-  private val cfgLoad         = WireDefault(rawCfgLoad)
-  private val cfgReset        = reset.asBool || cfgLoad
-  private val stageCount      = log2Ceil(params.fftSize)
-  private val stageCountWidth = log2Ceil(params.fftSize)
+  private val rawCfgLoad        = io.i_load_cfg.getOrElse(false.B)
+  private val rFrameDrainReload = RegInit(false.B)
+  private val cfgLoad           = WireDefault(rawCfgLoad || rFrameDrainReload)
+  private val cfgReset          = reset.asBool || cfgLoad
+  private val stageCount        = log2Ceil(params.fftSize)
+  private val stageCountWidth   = log2Ceil(params.fftSize)
 
   private val cfgSizeValue = if (params.runTime) {
     val value = Wire(UInt(stageCountWidth.W))
@@ -66,7 +69,19 @@ class FFT(val params: FFTParams) extends Module {
 
   private val wrapperOutputValid = WireDefault(false.B)
   private val wrapperOutputFire  = WireDefault(false.B)
+  private val wrapperOutputLast  = WireDefault(false.B)
   private val wrapperDraining    = WireDefault(false.B)
+  private val coreInputLastFire  = WireDefault(false.B)
+  private val drainOnLast        = io.i_drain_on_last.getOrElse(false.B)
+  private val rFrameDrainPending = RegInit(false.B)
+  private val rFrameDrainActive  = RegInit(false.B)
+  private val rSuppressAfterDrain = RegInit(false.B)
+  private val frameDrainBlocking = rFrameDrainPending || cfgLoad
+  private val frameDraining      = rFrameDrainActive && !cfgLoad
+  private val zeroDraining       = wrapperDraining || frameDraining
+  private val suppressOutput     = rSuppressAfterDrain
+  private val startFrameDrain    = drainOnLast && io.in.fire && io.i_last
+  private val frameDrainDone     = frameDraining && wrapperOutputFire && wrapperOutputLast
 
   private val activeStageCount = if (params.runTime) {
     val count = RegInit(stageCount.U(stageCountWidth.W))
@@ -75,10 +90,9 @@ class FFT(val params: FFTParams) extends Module {
   } else {
     stageCount.U(stageCountWidth.W)
   }
-
   if (params.useBitReverse) {
-    val outputFrameSampleCount = RegInit(0.U(log2Ceil(params.fftSize).W))
-    val outputInProgress       = RegNext(wrapperOutputValid, false.B) || outputFrameSampleCount =/= 0.U
+    val rOutputFrameActive = RegInit(false.B)
+    val outputInProgress   = RegNext(wrapperOutputValid, false.B) || rOutputFrameActive
     val r_cfg_drain_pending    = RegInit(false.B)
     val r_apply_pending_cfg    = RegInit(false.B)
     val applyRawCfg            = rawCfgLoad && !r_cfg_drain_pending && !outputInProgress
@@ -91,7 +105,7 @@ class FFT(val params: FFTParams) extends Module {
     val r_pending_direction =
       if (params.directionReg) Some(RegInit(params.direction.B)) else None
 
-    cfgLoad := applyRawCfg || applyPendingCfg
+    cfgLoad := applyRawCfg || applyPendingCfg || rFrameDrainReload
     wrapperDraining := r_cfg_drain_pending && !cfgLoad
 
     when(applyPendingCfg) {
@@ -115,28 +129,48 @@ class FFT(val params: FFTParams) extends Module {
       cfgDirectionValue.get := Mux(applyPendingCfg, r_pending_direction.get, io.i_fft_or_ifft.get)
     }
 
-    val activeFftSize = if (params.runTime) {
-      1.U << activeStageCount
-    } else {
-      params.fftSize.U
-    }
-    val activeLastSample = activeFftSize - 1.U
-    val outputLast       = outputFrameSampleCount === activeLastSample
-
     when(cfgLoad) {
-      outputFrameSampleCount := 0.U
+      rOutputFrameActive := false.B
+    }.elsewhen(wrapperOutputFire && wrapperOutputLast) {
+      rOutputFrameActive := false.B
     }.elsewhen(wrapperOutputFire) {
-      outputFrameSampleCount := Mux(outputLast, 0.U, outputFrameSampleCount + 1.U)
+      rOutputFrameActive := true.B
     }
 
-    when(r_cfg_drain_pending && wrapperOutputFire && outputLast) {
+    when(r_cfg_drain_pending && wrapperOutputFire && wrapperOutputLast) {
       r_apply_pending_cfg := true.B
     }
   }
 
+  when(rFrameDrainReload) {
+    rFrameDrainReload := false.B
+  }
+
+  when(cfgLoad) {
+    rFrameDrainPending := false.B
+    rFrameDrainActive  := false.B
+  }.elsewhen(frameDrainDone) {
+    rFrameDrainPending := false.B
+    rFrameDrainActive  := false.B
+    rFrameDrainReload  := true.B
+    rSuppressAfterDrain := true.B
+  }.otherwise {
+    when(startFrameDrain) {
+      rFrameDrainPending := true.B
+    }
+    when(drainOnLast && coreInputLastFire && (startFrameDrain || rFrameDrainPending)) {
+      rFrameDrainActive := true.B
+    }
+  }
+  when(rawCfgLoad) {
+    rSuppressAfterDrain := false.B
+  }.elsewhen(io.in.fire && !frameDrainBlocking && !zeroDraining) {
+    rSuppressAfterDrain := false.B
+  }
+
   private val fft: HasIO = params.sdfRadix match {
-    case Radix2  => Module(new R2FFT(params))
-    case Radix22 => Module(new R22FFT(params))
+    case Radix2  => withReset(coreReset) { Module(new R2FFT(params)) }
+    case Radix22 => withReset(coreReset) { Module(new R22FFT(params)) }
   }
 
   connectRuntimeConfig(fft)
@@ -155,7 +189,11 @@ class FFT(val params: FFTParams) extends Module {
     if (params.runTime)      fft.io.i_size.get        := cfgSizeValue.get
     if (params.divBy2Reg)    fft.io.i_divBy2.get      := cfgDivBy2Value.get
     if (params.directionReg) fft.io.i_fft_or_ifft.get := cfgDirectionValue.get
+    fft.io.i_drain_on_last.foreach(_ := false.B)
   }
+
+  private def coreReset: Bool =
+    if (params.runTime) reset.asBool else reset.asBool || rFrameDrainReload
 
   private def bitReverseParams: BitReverseParams =
     BitReverseParams(
@@ -166,11 +204,19 @@ class FFT(val params: FFTParams) extends Module {
     )
 
   private def connectDirect(fft: HasIO): Unit = {
-    fft.io.in <> io.in
-    fft.io.i_last := io.i_last
+    fft.io.in.valid := zeroDraining || (io.in.valid && !frameDrainBlocking)
+    fft.io.in.bits  := Mux(zeroDraining, 0.U.asTypeOf(params.inDataType), io.in.bits)
+    fft.io.i_last   := Mux(zeroDraining, false.B, io.i_last)
+    io.in.ready     := !zeroDraining && !frameDrainBlocking && fft.io.in.ready
 
-    io.out <> fft.io.out
-    io.o_last := fft.io.o_last
+    io.out.valid := !suppressOutput && fft.io.out.valid
+    fft.io.out.ready := suppressOutput || io.out.ready
+    io.out.bits := fft.io.out.bits
+    io.o_last := !suppressOutput && fft.io.o_last
+    wrapperOutputValid := io.out.valid
+    wrapperOutputFire  := io.out.fire
+    wrapperOutputLast  := io.o_last
+    coreInputLastFire  := !zeroDraining && fft.io.in.fire && io.i_last
   }
 
   private def connectWithBitReverse(fft: HasIO): Unit = {
@@ -180,33 +226,41 @@ class FFT(val params: FFTParams) extends Module {
     }
 
     if (params.decimation == DIF) {
-      fft.io.in.valid := Mux(wrapperDraining, true.B, io.in.valid)
-      fft.io.in.bits  := Mux(wrapperDraining, 0.U.asTypeOf(params.inDataType), io.in.bits)
-      fft.io.i_last   := Mux(wrapperDraining, false.B, io.i_last)
-      io.in.ready     := !wrapperDraining && fft.io.in.ready
+      fft.io.in.valid := zeroDraining || (io.in.valid && !frameDrainBlocking)
+      fft.io.in.bits  := Mux(zeroDraining, 0.U.asTypeOf(params.inDataType), io.in.bits)
+      fft.io.i_last   := Mux(zeroDraining, false.B, io.i_last)
+      io.in.ready     := !zeroDraining && !frameDrainBlocking && fft.io.in.ready
 
       bitReverse.io.in <> fft.io.out
       bitReverse.io.i_last := fft.io.o_last
 
-      io.out <> bitReverse.io.out
-      io.o_last := bitReverse.io.o_last
+      io.out.valid := !suppressOutput && bitReverse.io.out.valid
+      bitReverse.io.out.ready := suppressOutput || io.out.ready
+      io.out.bits := bitReverse.io.out.bits
+      io.o_last := !suppressOutput && bitReverse.io.o_last
       wrapperOutputValid := io.out.valid
       wrapperOutputFire  := io.out.fire
+      wrapperOutputLast  := io.o_last
+      coreInputLastFire  := !zeroDraining && fft.io.in.fire && io.i_last
     } else {
-      bitReverse.io.in.valid := !wrapperDraining && io.in.valid
+      bitReverse.io.in.valid := !frameDrainBlocking && !zeroDraining && io.in.valid
       bitReverse.io.in.bits  := io.in.bits
       bitReverse.io.i_last   := io.i_last
-      io.in.ready            := !wrapperDraining && bitReverse.io.in.ready
+      io.in.ready            := !frameDrainBlocking && !zeroDraining && bitReverse.io.in.ready
 
-      fft.io.in.valid        := Mux(wrapperDraining, true.B, bitReverse.io.out.valid)
-      fft.io.in.bits         := Mux(wrapperDraining, 0.U.asTypeOf(params.inDataType), bitReverse.io.out.bits)
-      fft.io.i_last          := Mux(wrapperDraining, false.B, bitReverse.io.o_last)
-      bitReverse.io.out.ready := !wrapperDraining && fft.io.in.ready
+      fft.io.in.valid        := zeroDraining || bitReverse.io.out.valid
+      fft.io.in.bits         := Mux(zeroDraining, 0.U.asTypeOf(params.inDataType), bitReverse.io.out.bits)
+      fft.io.i_last          := Mux(zeroDraining, false.B, bitReverse.io.o_last)
+      bitReverse.io.out.ready := !zeroDraining && fft.io.in.ready
 
-      io.out <> fft.io.out
-      io.o_last := fft.io.o_last
+      io.out.valid := !suppressOutput && fft.io.out.valid
+      fft.io.out.ready := suppressOutput || io.out.ready
+      io.out.bits := fft.io.out.bits
+      io.o_last := !suppressOutput && fft.io.o_last
       wrapperOutputValid := io.out.valid
       wrapperOutputFire  := io.out.fire
+      wrapperOutputLast  := io.o_last
+      coreInputLastFire  := !zeroDraining && bitReverse.io.out.fire && bitReverse.io.o_last
     }
   }
 }

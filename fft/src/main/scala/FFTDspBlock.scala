@@ -67,6 +67,11 @@ abstract class FFTDspBlock[D, U, E, O, B <: Data](
     } else {
       None
     }
+    val r_drain_on_last = if (params.drainOnLastReg) {
+      Some(RegInit(false.B))
+    } else {
+      None
+    }
 
     fft.io.in.valid := in.valid
     fft.io.in.bits  := in.bits.data(inputWidth - 1, 0).asTypeOf(params.inDataType)
@@ -82,6 +87,7 @@ abstract class FFTDspBlock[D, U, E, O, B <: Data](
     if (params.runTime)      fft.io.i_size.get        := r_size.get
     if (params.divBy2Reg)    fft.io.i_divBy2.get      := r_divBy2.get
     if (params.directionReg) fft.io.i_fft_or_ifft.get := r_direction.get
+    fft.io.i_drain_on_last.foreach(_ := r_drain_on_last.get)
 
     private def writeVec(reg: Vec[Bool], width: Int): RegWriteFn =
       RegWriteFn((valid, data) => {
@@ -136,6 +142,14 @@ abstract class FFTDspBlock[D, U, E, O, B <: Data](
           Seq(
             RegField.w1ToClear(stageCount, r_overflow.get, fft.io.o_overflow.get.asUInt,
               Some(RegFieldDesc("overflow", "Sticky per-stage overflow status; write 1 to clear each bit", reset = Some(0), volatile = true)))
+          )
+        ))
+      } else None,
+      if (params.drainOnLastReg) {
+        Some(regs.drainOnLast -> RegFieldGroup("drain_on_last", Some("FFT frame drain control"),
+          Seq(
+            RegField(1, r_drain_on_last.get,
+              RegFieldDesc("drain_on_last", "Feed zero samples after an input frame last", reset = Some(0)))
           )
         ))
       } else None
