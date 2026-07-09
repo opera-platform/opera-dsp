@@ -152,8 +152,9 @@ class DelaySRAMCells[T <: Data](val dataType: T, val maxDepth: Int) extends Modu
   })
 
   // State and the small queue hide SyncReadMem response latency.
-  val m_delay     = SyncReadMem(maxDepth, dataType)
-  val out_queue   = Module(new Queue(dataType.cloneType, 2, pipe = true, flow = true))
+  // TODO: Currently memories store raw bits: CIRCT cannot lower signed-typed (e.g. FixedPoint) memories. In future, we may want to support signed memories and/or use a more generic memory abstraction.
+  val m_delay     = SyncReadMem(maxDepth, UInt(dataType.getWidth.W))
+  val out_queue   = Module(new Queue(UInt(dataType.getWidth.W), 2, pipe = true, flow = true))
   val r_wr_idx    = RegInit(0.U(log2Ceil(maxDepth).W))
   val r_in_count  = RegInit(0.U(log2Ceil(maxDepth + 1).W))
   val r_fill_done = RegInit(false.B)
@@ -193,7 +194,7 @@ class DelaySRAMCells[T <: Data](val dataType: T, val maxDepth: Int) extends Modu
   )
 
   when(w_adv && !w_reset_all) {
-    m_delay.write(r_wr_idx, w_direct_data)
+    m_delay.write(r_wr_idx, w_direct_data.asUInt)
     r_wr_idx := w_next_wr_idx
   }
 
@@ -217,10 +218,10 @@ class DelaySRAMCells[T <: Data](val dataType: T, val maxDepth: Int) extends Modu
   }
 
   out_queue.io.enq.valid := r_resp_valid
-  out_queue.io.enq.bits  := Mux(r_resp_direct, r_direct_data, w_mem_data)
+  out_queue.io.enq.bits  := Mux(r_resp_direct, r_direct_data.asUInt, w_mem_data)
   out_queue.io.deq.ready := io.o_data.ready && !w_bypass
 
-  io.o_data.bits  := Mux(w_bypass, io.i_data.bits, out_queue.io.deq.bits)
+  io.o_data.bits  := Mux(w_bypass, io.i_data.bits, out_queue.io.deq.bits.asTypeOf(io.o_data.bits))
   io.o_data.valid := Mux(w_bypass, io.i_data.valid, out_queue.io.deq.valid)
   io.o_last       := Mux(w_bypass, io.i_last && io.i_data.fire, r_last_out)
   io.o_full       := r_fill_done && !r_draining

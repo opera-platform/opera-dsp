@@ -86,8 +86,9 @@ private[cfar] class CFARFrameReplay[T <: Data: Real](val params: CFARParams[T]) 
   )
 
   // Ping-pong frame write path
-  private val m_frame_0            = SyncReadMem(params.maxFftSize, params.inputType)
-  private val m_frame_1            = SyncReadMem(params.maxFftSize, params.inputType)
+  // TODO: Currently memories store raw bits: CIRCT cannot lower signed-typed (e.g. FixedPoint) memories. In future, we may want to support signed memories and/or use a more generic memory abstraction.
+  private val m_frame_0            = SyncReadMem(params.maxFftSize, UInt(params.inputType.getWidth.W))
+  private val m_frame_1            = SyncReadMem(params.maxFftSize, UInt(params.inputType.getWidth.W))
   private val r_frame_bank_full    = RegInit(VecInit(Seq.fill(2)(false.B)))
   private val r_frame_write_active = RegInit(false.B)
   private val r_write_bank_sel     = RegInit(false.B)
@@ -114,9 +115,9 @@ private[cfar] class CFARFrameReplay[T <: Data: Real](val params: CFARParams[T]) 
     assert(io.i_last === w_write_frame_last, "Frame CFAR requires i_last exactly at i_fft_size - 1")
 
     when(w_write_bank_sel) {
-      m_frame_1.write(r_write_bin_idx, io.i_data.bits)
+      m_frame_1.write(r_write_bin_idx, io.i_data.bits.asUInt)
     }.otherwise {
-      m_frame_0.write(r_write_bin_idx, io.i_data.bits)
+      m_frame_0.write(r_write_bin_idx, io.i_data.bits.asUInt)
     }
 
     when(!r_frame_write_active) {
@@ -191,7 +192,7 @@ private[cfar] class CFARFrameReplay[T <: Data: Real](val params: CFARParams[T]) 
   }
   when(r_mem_read_pending) {
     r_output_valid     := true.B
-    r_output_data      := Mux(r_mem_read_bank_sel, w_mem_data_1, w_mem_data_0)
+    r_output_data      := Mux(r_mem_read_bank_sel, w_mem_data_1, w_mem_data_0).asTypeOf(r_output_data)
     r_output_last      := r_mem_read_last
     r_mem_read_pending := false.B
   }
