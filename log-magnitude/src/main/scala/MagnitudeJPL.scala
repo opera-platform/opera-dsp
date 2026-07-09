@@ -77,11 +77,12 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
   // We want to avoid multiplication 7/8 * X. So we will instead subtract 1/8*X from X
   private val x_7_8: UInt = x -& (x >> 3).asUInt
   private val r_x_7_8: Option[Vec[UInt]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, x_7_8.cloneType))) else None
+  private val r_y_half: Option[Vec[UInt]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, (y >> 1).asUInt.cloneType))) else None
 
   // leA = 7/8 * X + 1/2 * Y;  X <= 3Y
   val leA: UInt =
     if (params.addPipeRegs)
-      r_x_7_8.get.head +& ShiftRegister(y >> 1, addPipeRegs, true.B).asUInt
+      r_x_7_8.get.head +& r_y_half.get.head
     else
       x_7_8 +& (y >> 1).asUInt
   private val r_leA: Option[Vec[UInt]] = if (params.addPipeRegs) Some(Reg(Vec(addPipeRegs, leA.cloneType))) else None
@@ -120,6 +121,7 @@ class MagnitudeJPL[T <: Data: Real: BinaryRepresentation](val params: LogMagnitu
           r_last(i)          := io.i_last
           r_geA.get(i)       := geA
           r_x_7_8.get.head   := x_7_8
+          r_y_half.get.head  := (y >> 1).asUInt
           r_x_ge_y3.get.head := x_ge_y3
         }
         else {
