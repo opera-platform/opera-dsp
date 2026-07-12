@@ -93,6 +93,23 @@ private[cfar] final case class CFAROutputQueueIO[T <: Data: Real](
   deqLastFire: Bool
 )
 
+private[cfar] class CFARThresholdPipelinePayload[T <: Data: Real](
+  params   : CFARParams[T],
+  noiseType: T
+) extends Bundle {
+  val noiseEstimate = noiseType.cloneType
+  val thresholdScale = params.scaleType.cloneType
+  val cut             = params.inputType.cloneType
+  val prev            = params.inputType.cloneType
+  val next            = params.inputType.cloneType
+  val fftSize         = UInt(log2Ceil(params.maxFftSize + 1).W)
+  val fftBin          = UInt(log2Ceil(params.maxFftSize).W)
+  val logMode         = Bool()
+  val peakGrouping    = Bool()
+  val last            = Bool()
+  val suppress        = Bool()
+}
+
 private[cfar] object CFARUtils {
   def widenedSumType[T <: Data](inputType: T, maxTerms: Int): T = {
     require(maxTerms > 0, "maxTerms must be positive")
@@ -196,6 +213,38 @@ private[cfar] object CFARUtils {
 
       (r_pipe_payload.last, r_pipe_valid.last, w_pipe_en.head)
     }
+  }
+
+  def thresholdInputPipeline[T <: Data: Real](
+    params        : CFARParams[T],
+    noiseEstimate : T,
+    thresholdScale: T,
+    cut           : T,
+    prev          : T,
+    next          : T,
+    fftSize       : UInt,
+    fftBin        : UInt,
+    logMode       : Bool,
+    peakGrouping  : Bool,
+    last          : Bool,
+    suppress      : Bool,
+    inputValid    : Bool,
+    outputReady   : Bool
+  ): (CFARThresholdPipelinePayload[T], Bool, Bool) = {
+    val w_payload = Wire(new CFARThresholdPipelinePayload(params, chiselTypeOf(noiseEstimate)))
+    w_payload.noiseEstimate := noiseEstimate
+    w_payload.thresholdScale := thresholdScale
+    w_payload.cut          := cut
+    w_payload.prev         := prev
+    w_payload.next         := next
+    w_payload.fftSize      := fftSize
+    w_payload.fftBin       := fftBin
+    w_payload.logMode      := logMode
+    w_payload.peakGrouping := peakGrouping
+    w_payload.last         := last
+    w_payload.suppress     := suppress
+
+    elasticPipeline(w_payload, inputValid, outputReady, thresholdPipeStages(params))
   }
 
   def resultPayload[T <: Data: Real](

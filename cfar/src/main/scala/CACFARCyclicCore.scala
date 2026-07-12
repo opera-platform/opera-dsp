@@ -7,7 +7,7 @@ import dsptools.numbers._
 private[cfar] class CACFARCyclicCore[T <: Data: Real: BinaryRepresentation](val params: CFARParams[T]) extends Module {
   CFARTypeSupport.requireSupportedParams(params)
 
-  private val output_delay_stages = CFARUtils.outputDelayStages(params)
+  private val output_delay_stages = if (params.retiming) 1 else 0
   private val output_queue_depth  = CFARUtils.outputQueueDepth(params)
 
   val io: CFARIO[T] = IO(CFARIO(params))
@@ -62,25 +62,62 @@ private[cfar] class CACFARCyclicCore[T <: Data: Real: BinaryRepresentation](val 
   private val w_right_noise_average = BinaryRepresentation[T].shr(w_right_reference_sum, w_cfg.noise_div_shift)
   private val w_noise_estimate      = CFARUtils.caModeAverage(w_left_noise_average, w_right_noise_average, w_cfg.cfar_mode)
 
+  // Register the threshold inputs and all associated metadata before the DSP arithmetic.
+  private val w_threshold_output_ready = Wire(Bool())
+  private val (w_threshold_payload, w_threshold_valid, w_threshold_input_ready) =
+    CFARUtils.thresholdInputPipeline(
+      params,
+      w_noise_estimate,
+      w_cfg.threshold_scale,
+      w_window.cut,
+      w_window.prev,
+      w_window.next,
+      w_cfg.fft_size,
+      w_window.fftBin,
+      w_cfg.log_mode,
+      w_cfg.peak_grouping,
+      w_window.last,
+      false.B,
+      window_provider.io.o_window.valid,
+      w_threshold_output_ready
+    )
+
   // Apply runtime/static threshold scaling in the same numeric mode as the stream core.
-  private val w_threshold = CFARUtils.thresholdScale(params, w_noise_estimate, w_cfg.threshold_scale, w_cfg.log_mode)
+  private val w_threshold = CFARUtils.thresholdScale(
+    params,
+    w_threshold_payload.noiseEstimate,
+    w_threshold_payload.thresholdScale,
+    w_threshold_payload.logMode
+  )
 
   // Wrap peak grouping uses the circular previous/next neighbors from the window payload.
-  private val w_local_max       = CFARUtils.greaterThan(w_window.cut, w_window.prev) && CFARUtils.greaterThan(w_window.cut, w_window.next)
-  private val w_above_threshold = CFARUtils.greaterThan(w_window.cut, w_threshold)
-  private val w_peak            = Mux(w_cfg.peak_grouping, w_above_threshold && w_local_max, w_above_threshold)
+  private val w_local_max = CFARUtils.greaterThan(w_threshold_payload.cut, w_threshold_payload.prev) && CFARUtils.greaterThan(w_threshold_payload.cut, w_threshold_payload.next)
+  private val w_above_threshold = CFARUtils.greaterThan(w_threshold_payload.cut, w_threshold)
+  private val w_peak = Mux(
+    w_threshold_payload.peakGrouping,
+    w_above_threshold && w_local_max,
+    w_above_threshold
+  )
 
   // Package the CUT result and keep bin/last aligned through the threshold pipeline.
   private val w_output_queue =
     CFARUtils.outputQueue(
       params,
-      CFARUtils.resultPayload(params, w_peak, w_threshold, w_window.cut, w_window.last, w_window.fftBin),
-      window_provider.io.o_window.valid,
+      CFARUtils.resultPayload(
+        params,
+        w_peak,
+        w_threshold,
+        w_threshold_payload.cut,
+        w_threshold_payload.last,
+        w_threshold_payload.fftBin
+      ),
+      w_threshold_valid,
       io.o_data.ready,
       output_delay_stages,
       output_queue_depth
     )
-  window_provider.io.o_window.ready := w_output_queue.inputReady
+  w_threshold_output_ready := w_output_queue.inputReady
+  window_provider.io.o_window.ready := w_threshold_input_ready
 
   io.o_data.valid := w_output_queue.deq.valid
   io.o_data.bits  := w_output_queue.deq.bits.output

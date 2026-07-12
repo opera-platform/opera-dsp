@@ -8,7 +8,7 @@ private[cfar] class CACFARStreamCore[T <: Data: Real: BinaryRepresentation](val 
 
   val io: CFARIO[T] = IO(CFARIO(params))
 
-  private val output_delay_stages = CFARUtils.outputDelayStages(params)
+  private val output_delay_stages = if (params.retiming) 1 else 0
   private val output_queue_depth  = CFARUtils.outputQueueDepth(params)
 
   // Static defaults used before the first explicit load_cfg.
@@ -71,24 +71,68 @@ private[cfar] class CACFARStreamCore[T <: Data: Real: BinaryRepresentation](val 
     w_window.isRightEdge
   )
 
+  // Register the threshold inputs and all associated metadata before the DSP arithmetic.
+  private val w_threshold_output_ready = Wire(Bool())
+  private val (w_threshold_payload, w_threshold_valid, w_threshold_input_ready) =
+    CFARUtils.thresholdInputPipeline(
+      params,
+      w_avg_pre_scale,
+      w_cfg.threshold_scale,
+      w_window.cut,
+      w_window.prev,
+      w_window.next,
+      w_cfg.fft_size,
+      w_window.fftBin,
+      w_cfg.log_mode,
+      w_cfg.peak_grouping,
+      w_window.last,
+      w_suppress_edge_out,
+      window_provider.io.o_window.valid,
+      w_threshold_output_ready
+    )
+
   // Apply runtime/static threshold scaling in linear or log mode.
-  private val w_threshold = CFARUtils.thresholdScale(params, w_avg_pre_scale, w_cfg.threshold_scale, w_cfg.log_mode)
+  private val w_threshold = CFARUtils.thresholdScale(
+    params,
+    w_threshold_payload.noiseEstimate,
+    w_threshold_payload.thresholdScale,
+    w_threshold_payload.logMode
+  )
 
   // Linear endpoint peak grouping treats missing endpoint neighbors as automatically OK.
-  private val w_local_max = CFARUtils.linearLocalMax(w_window.cut, w_window.prev, w_window.next, w_window.fftBin, w_cfg.fft_size)
-  private val w_above_th  = CFARUtils.greaterThan(w_window.cut, w_threshold)
-  private val w_peak      = Mux(w_cfg.peak_grouping, w_above_th && w_local_max, w_above_th)
+  private val w_local_max = CFARUtils.linearLocalMax(
+    w_threshold_payload.cut,
+    w_threshold_payload.prev,
+    w_threshold_payload.next,
+    w_threshold_payload.fftBin,
+    w_threshold_payload.fftSize
+  )
+  private val w_above_th = CFARUtils.greaterThan(w_threshold_payload.cut, w_threshold)
+  private val w_peak = Mux(
+    w_threshold_payload.peakGrouping,
+    w_above_th && w_local_max,
+    w_above_th
+  )
 
   private val w_output_queue =
     CFARUtils.outputQueue(
       params,
-      CFARUtils.resultPayload(params, w_peak, w_threshold, w_window.cut, w_window.last, w_window.fftBin, w_suppress_edge_out),
-      window_provider.io.o_window.valid,
+      CFARUtils.resultPayload(
+        params,
+        w_peak,
+        w_threshold,
+        w_threshold_payload.cut,
+        w_threshold_payload.last,
+        w_threshold_payload.fftBin,
+        w_threshold_payload.suppress
+      ),
+      w_threshold_valid,
       io.o_data.ready,
       output_delay_stages,
       output_queue_depth
     )
-  window_provider.io.o_window.ready := w_output_queue.inputReady
+  w_threshold_output_ready := w_output_queue.inputReady
+  window_provider.io.o_window.ready := w_threshold_input_ready
   window_provider.io.i_output_done  := w_output_queue.enqLastFire
 
   when(w_output_queue.enqLastFire) {
