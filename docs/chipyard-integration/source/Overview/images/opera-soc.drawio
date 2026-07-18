@@ -1,0 +1,349 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.1.2 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36" compressed="false" version="28.1.2" pages="2">
+  <diagram id="hardware-architecture" name="1. Hardware Architecture">
+    <mxGraphModel dx="1678" dy="1069" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1120" background="#F8FAFC" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fpga" value="&lt;b&gt;NEXYS VIDEO FPGA&lt;/b&gt;" style="swimlane;html=1;rounded=1;startSize=42;horizontal=1;fillColor=#EEF2FF;swimlaneFillColor=#FFFFFF;strokeColor=#818CF8;strokeWidth=2;fontColor=#3730A3;fontSize=15;fontStyle=1;shadow=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="20" y="80" width="1325" height="850" as="geometry">
+            <mxRectangle x="35" y="105" width="190" height="42" as="alternateBounds" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="soc" value="&lt;b&gt;Rocket Chipyard SoC · DigitalTop&lt;/b&gt;" style="swimlane;html=1;rounded=1;startSize=36;horizontal=1;fillColor=#F8FAFC;swimlaneFillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=1.5;fontColor=#334155;fontSize=14;fontStyle=1;arcSize=8;" parent="1" vertex="1">
+          <mxGeometry x="30" y="140" width="1040" height="755" as="geometry" />
+        </mxCell>
+        <mxCell id="rocket" value="&lt;b&gt;Rocket core&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;RV64 · bare-metal firmware&lt;br&gt;cached loads/stores + MMIO&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=16;shadow=1;arcSize=14;" parent="soc" vertex="1">
+          <mxGeometry x="15" y="70" width="165" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="pbus" value="&lt;b&gt;PBUS&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#475569&quot;&gt;64-bit TL&lt;br&gt;control / status&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=2;fontColor=#1D4ED8;fontSize=15;arcSize=12;" parent="soc" vertex="1">
+          <mxGeometry x="205" y="70" width="70" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="fbus" value="&lt;b&gt;FBUS&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#475569&quot;&gt;64-bit TL&lt;br&gt;DMA masters&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=2;fontColor=#6D28D9;fontSize=15;arcSize=12;" parent="soc" vertex="1">
+          <mxGeometry x="220" y="407.5" width="70" height="102.5" as="geometry" />
+        </mxCell>
+        <mxCell id="scratch" value="&lt;b&gt;64 KiB on-chip scratchpad&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;MBUS @ 0x0800_0000&lt;br&gt;DSP input/output + Ethernet bounce buffers&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontColor=#92400E;fontSize=14;shadow=1;arcSize=12;" parent="soc" vertex="1">
+          <mxGeometry x="30" y="407.5" width="175" height="102.5" as="geometry" />
+        </mxCell>
+        <mxCell id="board_io" value="&lt;b&gt;FPGA shell / board I/O&lt;/b&gt;" style="swimlane;html=1;rounded=1;startSize=36;horizontal=1;fillColor=#F5F3FF;swimlaneFillColor=#FFFFFF;strokeColor=#A78BFA;strokeWidth=1.5;fontColor=#5B21B6;fontSize=14;fontStyle=1;arcSize=8;" parent="1" vertex="1">
+          <mxGeometry x="1090" y="140" width="230" height="755" as="geometry" />
+        </mxCell>
+        <mxCell id="fabric" value="&lt;b&gt;Coherent TileLink fabric&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;SBUS / MBUS routing · 50 MHz SoC domain&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E2E8F0;strokeColor=#64748B;strokeWidth=2;fontColor=#1E293B;fontSize=14;shadow=1;arcSize=12;" parent="1" vertex="1">
+          <mxGeometry x="75" y="420" width="275" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="ddr" value="&lt;b&gt;512 MiB DDR3&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;program + C buffers&lt;br&gt;TL backing memory / MIG&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F59E0B;strokeWidth=1.5;fontColor=#9A3412;fontSize=14;arcSize=12;" parent="1" vertex="1">
+          <mxGeometry x="75" y="700" width="175" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="cache_note" value="DMA is non-coherent with Rocket L1 D-cache.&lt;br&gt;&lt;b&gt;Firmware uses C.FLUSH + fence&lt;/b&gt; at Ethernet ownership boundaries." style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#FFF7ED;strokeColor=#FB923C;fontColor=#7C2D12;fontSize=11;align=left;spacingLeft=8;" parent="1" vertex="1">
+          <mxGeometry x="75" y="810" width="275" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_group" value="&lt;b&gt;OPERA DSP accelerator&lt;/b&gt; · independent AXI4 memory master + AXI4-Stream processing loop" style="swimlane;html=1;rounded=1;startSize=38;horizontal=1;fillColor=#FFF7ED;swimlaneFillColor=#FFFBEB;strokeColor=#F97316;strokeWidth=2;fontColor=#9A3412;fontSize=14;fontStyle=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="390" y="185" width="660" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_csr" value="&lt;b&gt;DSP control/status CSRs&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#7C2D12&quot;&gt;DMA 0x1005_0000 · Window 0x1005_1000 / RAM 0x1005_2000 · FFT 0x1005_3000 · LogMag 0x1005_4000 · CFAR 0x1005_5000&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#FB923C;strokeWidth=1.5;fontColor=#9A3412;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="400" y="235" width="640" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_dma" value="&lt;b&gt;StreamingAXI4DMA&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#7C2D12&quot;&gt;M2S read + S2M write&lt;br&gt;64-bit memory beats&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FED7AA;strokeColor=#EA580C;strokeWidth=2;fontColor=#9A3412;fontSize=12;shadow=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="420" y="315" width="125" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="frame" value="&lt;b&gt;64→2×32&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;width adapter&lt;br&gt;+ TLAST / 256&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;strokeWidth=1.5;fontColor=#9A3412;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="570" y="320" width="82" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="window" value="&lt;b&gt;Hamming&lt;br&gt;Window&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;complex Q2.14&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;strokeWidth=1.5;fontColor=#9A3412;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="675" y="320" width="75" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="fft" value="&lt;b&gt;FFT&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;256-point&lt;br&gt;radix-2² DIF&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;strokeWidth=1.5;fontColor=#9A3412;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="775" y="320" width="70" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="logmag" value="&lt;b&gt;Log&lt;br&gt;Magnitude&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;32-bit Q18.14&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;strokeWidth=1.5;fontColor=#9A3412;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="870" y="320" width="70" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="cfar" value="&lt;b&gt;CA-CFAR&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;64-bit record&lt;br&gt;per FFT bin&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDBA74;strokeColor=#EA580C;strokeWidth=2;fontColor=#9A3412;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="965" y="320" width="70" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="eth_group" value="&lt;b&gt;Verilog RGMII Ethernet subsystem&lt;/b&gt; · frame-aware DMA frontend + Forencich MAC" style="swimlane;html=1;rounded=1;startSize=38;horizontal=1;fillColor=#ECFDF5;swimlaneFillColor=#F0FDFA;strokeColor=#10B981;strokeWidth=2;fontColor=#065F46;fontSize=14;fontStyle=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="390" y="505" width="660" height="335" as="geometry" />
+        </mxCell>
+        <mxCell id="eth_csr" value="&lt;b&gt;Ethernet control/status CSRs&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#065F46&quot;&gt;DMA 0x1006_0000 · frontend/length queues 0x1006_1000 · MAC status/control 0x1006_2000 · MDIO 0x1006_3000&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#34D399;strokeWidth=1.5;fontColor=#065F46;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="400" y="553" width="640" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="eth_dma" value="&lt;b&gt;StreamingAXI4DMA&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#065F46&quot;&gt;M2S TX + S2M RX&lt;br&gt;64-bit memory beats&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A7F3D0;strokeColor=#059669;strokeWidth=2;fontColor=#065F46;fontSize=12;shadow=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="420" y="645" width="130" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="frontend" value="&lt;b&gt;EthDmaFrontend&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#065F46&quot;&gt;RX: pack 8 bytes + TLAST&lt;br&gt;TX: unpack + exact length&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#10B981;strokeWidth=2;fontColor=#065F46;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="650" y="645" width="130" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="mac" value="&lt;b&gt;eth_mac_1g_rgmii_fifo&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#065F46&quot;&gt;Forencich Verilog blackbox&lt;br&gt;byte AXI4-Stream ↔ RGMII&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6EE7B7;strokeColor=#047857;strokeWidth=2;fontColor=#064E3B;fontSize=12;shadow=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="880" y="645" width="140" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="mdio" value="&lt;b&gt;MdioTL + mdio_master.v&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#065F46&quot;&gt;PHY discovery, delay, autonegotiation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CCFBF1;strokeColor=#0D9488;strokeWidth=1.5;fontColor=#115E59;fontSize=11;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="775" y="765" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="eth_pll" value="&lt;b&gt;Series-7 MMCM&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#5B21B6&quot;&gt;100 MHz board clock&lt;br&gt;→ 125 MHz + 125 MHz @ 90°&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#8B5CF6;strokeWidth=2;fontColor=#5B21B6;fontSize=12;shadow=1;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1120" y="235" width="170" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="rgmii_pins" value="&lt;b&gt;RGMII + PHY reset pins&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#5B21B6&quot;&gt;4-bit DDR RX/TX + control + clocks&lt;br&gt;LVCMOS25 / reset LVCMOS33&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DDD6FE;strokeColor=#7C3AED;strokeWidth=2;fontColor=#5B21B6;fontSize=12;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1120" y="625" width="170" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="mdio_iobuf" value="&lt;b&gt;MDC + MDIO IOBUF&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#5B21B6&quot;&gt;bidirectional management pins&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#8B5CF6;strokeWidth=1.5;fontColor=#5B21B6;fontSize=11;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1120" y="765" width="170" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="uart_tsi" value="&lt;b&gt;UART-TSI&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#5B21B6&quot;&gt;boot/load + console&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#8B5CF6;strokeWidth=1.5;fontColor=#5B21B6;fontSize=11;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1120" y="845" width="170" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="phy" value="&lt;b&gt;RTL8211E PHY&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;RGMII ↔ 1000BASE-T&lt;br&gt;MDIO managed&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1F5F9;strokeColor=#475569;strokeWidth=2;fontColor=#1E293B;fontSize=14;shadow=1;arcSize=12;" parent="1" vertex="1">
+          <mxGeometry x="1390" y="620" width="145" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="pc" value="&lt;b&gt;Linux PC&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;AF_PACKET raw Ethernet&lt;br&gt;EtherType 0x88B5&lt;/font&gt;" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=13;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=-2;" parent="1" vertex="1">
+          <mxGeometry x="1620" y="610" width="105" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="host_uart" value="Host uart_tsi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#8B5CF6;fontColor=#5B21B6;fontSize=11;arcSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1430" y="845" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e_rocket_fabric" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#475569;strokeWidth=2;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#334155;labelBackgroundColor=#FFFFFF;entryX=0.192;entryY=0.02;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="rocket" target="fabric" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fabric_pbus" value="TL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" parent="1" target="pbus" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="420" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_fabric_fbus" value="TL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7C3AED;strokeWidth=2;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#6D28D9;labelBackgroundColor=#FFFFFF;exitX=0.765;exitY=1.01;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="fabric" target="fbus" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fabric_scratch" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#D97706;strokeWidth=2;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#92400E;labelBackgroundColor=#FFFFFF;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.484;entryY=-0.004;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="fabric" target="scratch" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fabric_ddr" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F59E0B;strokeWidth=1.5;startArrow=block;startFill=1;endArrow=block;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="fabric" target="ddr" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="40" y="458" />
+              <mxPoint x="40" y="746" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_pbus_dsp" value="Rocket MMIO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;exitX=1.005;exitY=0.439;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="pbus" target="dsp_csr" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="310" y="260" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_pbus_eth" value="Rocket MMIO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" parent="1" target="eth_csr" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="305" y="290" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="380" y="290" />
+              <mxPoint x="380" y="490" />
+              <mxPoint x="713" y="490" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_fbus_dsp" value="AXI4→TL DMA master" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7C3AED;strokeWidth=2.5;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#6D28D9;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.25;exitDx=0;exitDy=0;" parent="1" source="fbus" target="dsp_dma" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="330" y="573" />
+              <mxPoint x="360" y="573" />
+              <mxPoint x="360" y="361" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_fbus_eth" value="AXI4→TL DMA master" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7C3AED;strokeWidth=2.5;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#6D28D9;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.75;exitDx=0;exitDy=0;" parent="1" source="fbus" target="eth_dma" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dma_frame" value="M2S" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=2.5;endArrow=block;endFill=1;fontSize=10;fontColor=#9A3412;labelBackgroundColor=#FFF7ED;" parent="1" source="dsp_dma" target="frame" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_frame_window" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=2.5;endArrow=block;endFill=1;" parent="1" source="frame" target="window" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_window_fft" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=2.5;endArrow=block;endFill=1;" parent="1" source="window" target="fft" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fft_log" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=2.5;endArrow=block;endFill=1;" parent="1" source="fft" target="logmag" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_log_cfar" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=2.5;endArrow=block;endFill=1;" parent="1" source="logmag" target="cfar" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cfar_dma" value="S2M · 64-bit CFAR words" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#C2410C;strokeWidth=2.5;endArrow=block;endFill=1;fontSize=10;fontColor=#9A3412;labelBackgroundColor=#FFF7ED;" parent="1" source="cfar" target="dsp_dma" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="440" />
+              <mxPoint x="485" y="440" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_eth_dma_front" value="64-bit AXI4-Stream" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=2.5;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#065F46;labelBackgroundColor=#F0FDFA;" parent="1" source="eth_dma" target="frontend" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_front_mac" value="byte AXI4-Stream" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=2.5;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#065F46;labelBackgroundColor=#F0FDFA;" parent="1" source="frontend" target="mac" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_mac_pins" value="RGMII" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#047857;strokeWidth=3;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=11;fontColor=#065F46;labelBackgroundColor=#FFFFFF;" parent="1" source="mac" target="rgmii_pins" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pins_phy" value="4-bit DDR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#475569;strokeWidth=3;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#334155;labelBackgroundColor=#FFFFFF;" parent="1" source="rgmii_pins" target="phy" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_phy_pc" value="eth cable" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=3;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=11;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" parent="1" source="phy" target="pc" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_mdio_iobuf" value="MDC / MDIO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#0D9488;strokeWidth=1.8;startArrow=block;startFill=1;endArrow=block;endFill=1;fontSize=10;fontColor=#115E59;labelBackgroundColor=#FFFFFF;" parent="1" source="mdio" target="mdio_iobuf" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_iobuf_phy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#0D9488;strokeWidth=1.8;startArrow=block;startFill=1;endArrow=block;endFill=1;" parent="1" source="mdio_iobuf" target="phy" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pll_mac" value="GTX clocks + reset" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8B5CF6;strokeWidth=2;dashed=1;dashPattern=5 4;endArrow=block;endFill=1;fontSize=10;fontColor=#5B21B6;labelBackgroundColor=#FFFFFF;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="eth_pll" target="mac" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1060" y="278" />
+              <mxPoint x="1060" y="620" />
+              <mxPoint x="950" y="620" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_uart" value="load .riscv / HTIF console" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8B5CF6;strokeWidth=1.8;dashed=1;endArrow=block;endFill=1;fontSize=10;fontColor=#5B21B6;labelBackgroundColor=#FFFFFF;" parent="1" source="host_uart" target="uart_tsi" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="runtime-data-flow" name="2. Runtime Data Flow">
+    <mxGraphModel dx="1800" dy="1120" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1120" math="0" shadow="0" background="#F8FAFC">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" value="&lt;b&gt;End-to-End Runtime Data Flow&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontColor=#0F172A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="40" y="22" width="900" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="What the Rocket firmware does between raw Ethernet reception and OPERA DSP execution" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;fontColor=#64748B;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="42" y="62" width="1000" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="phase_rx" value="&lt;b&gt;A · RECEIVE INPUT&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.5;fontColor=#065F46;fontSize=13;align=left;spacingLeft=14;arcSize=14;" vertex="1" parent="1">
+          <mxGeometry x="45" y="115" width="1680" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="rx_pc" value="&lt;b&gt;1 · PC transfer tool&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Quantizes text samples to packed complex Q2.14&lt;br&gt;and sends chunks in raw L2 frames (0x88B5)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=13;shadow=1;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="65" y="195" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="rx_phy" value="&lt;b&gt;2 · PHY + RGMII MAC&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;RTL8211E → 4-bit DDR RGMII&lt;br&gt;Forencich MAC emits byte stream&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#059669;strokeWidth=2;fontColor=#065F46;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="345" y="195" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="rx_front" value="&lt;b&gt;3 · Ethernet frontend&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Packs bytes LSB-first into 64-bit beats&lt;br&gt;publishes true RX length; asserts TLAST&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#059669;strokeWidth=2;fontColor=#065F46;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="625" y="195" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="rx_dma" value="&lt;b&gt;4 · Ethernet DMA (S2M)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Frame-aware write terminates on TLAST&lt;br&gt;through FBUS into RX bounce buffer&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C4B5FD;strokeColor=#7C3AED;strokeWidth=2;fontColor=#5B21B6;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="905" y="195" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="rx_bounce" value="&lt;b&gt;5 · RX bounce&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;0x0800_D000 · 4 KiB&lt;br&gt;on-chip scratchpad&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontColor=#92400E;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1185" y="195" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="rx_fw" value="&lt;b&gt;6 · Rocket firmware&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;C.FLUSH + fence; copies frame → rx_frame → file_buffer&lt;br&gt;validates length, sequence and CRC&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BFDBFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=13;shadow=1;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="195" width="260" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="phase_dsp" value="&lt;b&gt;B · PROCESS THROUGH OPERA&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F97316;strokeWidth=1.5;fontColor=#9A3412;fontSize=13;align=left;spacingLeft=14;arcSize=14;" vertex="1" parent="1">
+          <mxGeometry x="45" y="355" width="1680" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_input" value="&lt;b&gt;7 · DSP input region&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Rocket writes 32-bit packed Q2.14 samples&lt;br&gt;0x0800_0000 .. 0x0800_3FFF&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontColor=#92400E;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="65" y="435" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_setup" value="&lt;b&gt;8 · Rocket programs MMIO&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Window / FFT / LogMag / CFAR configuration&lt;br&gt;DMA M2S=input; S2M=output; then triggers both&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BFDBFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=13;shadow=1;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="345" y="435" width="250" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_m2s" value="&lt;b&gt;9 · DSP DMA M2S&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Reads 64-bit beats&lt;br&gt;two 32-bit samples per beat&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FED7AA;strokeColor=#EA580C;strokeWidth=2;fontColor=#9A3412;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="645" y="435" width="190" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_pipe" value="&lt;b&gt;10 · AXI4-Stream DSP pipeline&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px;color:#7C2D12&quot;&gt;64→32 + TLAST/256  →  Hamming window  →  FFT-256  →  log magnitude  →  CA-CFAR&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#475569&quot;&gt;ready/valid backpressure is preserved end-to-end&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;strokeWidth=2.5;fontColor=#9A3412;fontSize=13;shadow=1;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="885" y="425" width="500" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="dsp_output" value="&lt;b&gt;11 · DSP DMA S2M&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;One packed 64-bit CFAR result per bin&lt;br&gt;writes 0x0800_4000 .. 0x0800_BFFF&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDBA74;strokeColor=#EA580C;strokeWidth=2;fontColor=#9A3412;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="435" width="260" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="phase_tx" value="&lt;b&gt;C · RETURN RESULTS&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#6366F1;strokeWidth=1.5;fontColor=#3730A3;fontSize=13;align=left;spacingLeft=14;arcSize=14;" vertex="1" parent="1">
+          <mxGeometry x="45" y="605" width="1680" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="tx_fw" value="&lt;b&gt;12 · Rocket firmware&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Polls DMA completion, reads CFAR words,&lt;br&gt;packs response + CRC into Ethernet protocol&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BFDBFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=13;shadow=1;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="690" width="260" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tx_bounce" value="&lt;b&gt;13 · TX bounce&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;0x0800_C000 · 4 KiB&lt;br&gt;cache cleaned before DMA&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontColor=#92400E;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1185" y="690" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tx_dma" value="&lt;b&gt;14 · Ethernet DMA (M2S)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Reads 64-bit beats after firmware queues&lt;br&gt;the exact byte length in frontend CSR&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C4B5FD;strokeColor=#7C3AED;strokeWidth=2;fontColor=#5B21B6;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="905" y="690" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tx_front" value="&lt;b&gt;15 · Frontend + MAC&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Unpacks 64-bit beats to bytes; trims padding&lt;br&gt;with queued length; emits RGMII frame&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#059669;strokeWidth=2;fontColor=#065F46;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="625" y="690" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tx_phy" value="&lt;b&gt;16 · RTL8211E PHY&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;RGMII to copper Ethernet&lt;br&gt;link configured over MDIO&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#059669;strokeWidth=2;fontColor=#065F46;fontSize=13;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="345" y="690" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tx_pc" value="&lt;b&gt;17 · PC receives result&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Verifies transfer CRC and writes rx_file.csv&lt;br&gt;threshold · CUT · bin · peak · raw word&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=13;shadow=1;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="65" y="690" width="230" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="rx_pc" target="rx_phy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="rx_phy" target="rx_front">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="rx_front" target="rx_dma">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7C3AED;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="rx_dma" target="rx_bounce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r5" value="CPU copy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2.5;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="rx_bounce" target="rx_fw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r6" value="validated samples" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2.5;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="rx_fw" target="dsp_input">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1710" y="325" />
+              <mxPoint x="180" y="325" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r7" value="MMIO setup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="dsp_input" target="dsp_setup">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="dsp_setup" target="dsp_m2s">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r9" value="AXI4-Stream" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=3;endArrow=block;endFill=1;fontSize=10;fontColor=#9A3412;labelBackgroundColor=#FFF7ED;" edge="1" parent="1" source="dsp_m2s" target="dsp_pipe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r10" value="64-bit/bin" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#EA580C;strokeWidth=3;endArrow=block;endFill=1;fontSize=10;fontColor=#9A3412;labelBackgroundColor=#FFF7ED;" edge="1" parent="1" source="dsp_pipe" target="dsp_output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r11" value="CPU reads" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2.5;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="dsp_output" target="tx_fw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r12" value="frame copy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2563EB;strokeWidth=2.5;endArrow=block;endFill=1;fontSize=10;fontColor=#1D4ED8;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="tx_fw" target="tx_bounce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7C3AED;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="tx_bounce" target="tx_dma">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="tx_dma" target="tx_front">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="tx_front" target="tx_phy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#059669;strokeWidth=3;endArrow=block;endFill=1;" edge="1" parent="1" source="tx_phy" target="tx_pc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="regions" value="&lt;b&gt;NON-OVERLAPPING ON-CHIP SCRATCHPAD LAYOUT&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;table cellpadding=&quot;5&quot; cellspacing=&quot;0&quot; style=&quot;width:100%;font-size:11px;border-collapse:collapse&quot;&gt;&lt;tr&gt;&lt;td style=&quot;background:#FFEDD5;border:1px solid #FDBA74&quot;&gt;&lt;b&gt;DSP input&lt;/b&gt;&lt;br&gt;0x0800_0000 – 0x0800_3FFF&lt;/td&gt;&lt;td style=&quot;background:#FED7AA;border:1px solid #FB923C&quot;&gt;&lt;b&gt;DSP output&lt;/b&gt;&lt;br&gt;0x0800_4000 – 0x0800_BFFF&lt;/td&gt;&lt;td style=&quot;background:#D1FAE5;border:1px solid #34D399&quot;&gt;&lt;b&gt;Ethernet TX&lt;/b&gt;&lt;br&gt;0x0800_C000 – 0x0800_CFFF&lt;/td&gt;&lt;td style=&quot;background:#A7F3D0;border:1px solid #10B981&quot;&gt;&lt;b&gt;Ethernet RX&lt;/b&gt;&lt;br&gt;0x0800_D000 – 0x0800_DFFF&lt;/td&gt;&lt;td style=&quot;background:#E2E8F0;border:1px solid #94A3B8&quot;&gt;&lt;b&gt;Reserved&lt;/b&gt;&lt;br&gt;0x0800_E000 – 0x0800_FFFF&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=1.5;fontColor=#334155;fontSize=12;align=left;verticalAlign=top;spacing=12;shadow=1;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="855" width="1100" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="record" value="&lt;b&gt;CFAR output word&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;[63:41] threshold Q9.14&lt;br&gt;[40:9] CUT Q18.14&lt;br&gt;[8:1] FFT bin · [0] peak&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;strokeWidth=1.5;fontColor=#9A3412;fontSize=12;align=left;spacingLeft=12;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1205" y="855" width="235" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="limit" value="&lt;b&gt;Transfer limits&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;FFT: 256 samples / frame&lt;br&gt;Maximum: 4096 samples&lt;br&gt;Input: 4 B / sample&lt;br&gt;Output: 8 B / bin&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=1.5;fontColor=#1E3A8A;fontSize=12;align=left;spacingLeft=12;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="855" width="225" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="source2" value="Runtime source anchors: software/opera-dsp/opera_dsp_fpga.c · opera_dsp_regs.h · software/ethernet/eth.h · software/opera-dsp/pc/opera_dsp_pc" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontColor=#64748B;" vertex="1" parent="1">
+          <mxGeometry x="65" y="1035" width="1500" height="24" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
