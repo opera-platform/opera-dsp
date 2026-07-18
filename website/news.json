@@ -1,5 +1,12 @@
 [
   {
+    "date": "July 19, 2026",
+    "title": "OPERA-DSP Chipyard Integration Example Added",
+    "url": "docs/chipyard-integration/index.html",
+    "body": "A new integration example shows how the OPERA-DSP chain is connected to a Rocket core in Chipyard alongside RGMII Ethernet. The documentation covers the SoC architecture and address map, loopback simulations, Nexys Video bitstream generation, FPGA firmware, and CFAR result plotting.",
+    "tag": "Documentation"
+  },
+  {
     "date": "May 29, 2026",
     "title": "OPERA-DSP v1.0 Released",
     "url": "https://github.com/opera-platform/opera-dsp/releases/tag/v1.0",
