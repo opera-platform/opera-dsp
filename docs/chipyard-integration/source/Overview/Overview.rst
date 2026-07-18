@@ -1,6 +1,8 @@
 OPERA-DSP Chipyard Integration
 ==============================
 
+Please see the example here: `opera-soc <https://github.com/opera-platform/opera-soc>`_.
+
 The OPERA-DSP chain is integrated into Chipyard as a memory-mapped accelerator next to a
 Verilog RGMII Ethernet subsystem.  The ``OperaDspNexysVideoConfig`` configuration combines
 one Rocket core, the OPERA-DSP chain, Ethernet, MDIO PHY management, DDR3, a 64 KiB memory-bus

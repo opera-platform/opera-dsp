@@ -11,6 +11,10 @@ The OPERA-DSP project goal is to develop an open-source FMCW radar DSP hardware 
 
 The project website is available at [opera-platform.github.io/opera-dsp](https://opera-platform.github.io/opera-dsp/). It includes the project overview, news, and generated block documentation.
 
+## OPERA-SoC
+
+[OPERA-SoC](https://github.com/opera-platform/opera-soc) is a Chipyard fork that integrates the OPERA DSP chain and Ethernet with a Rocket core.
+
 ## Dependencies
 
 ### OpenJDK and SBT
