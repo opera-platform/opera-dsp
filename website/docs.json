@@ -25,7 +25,8 @@
         { "title": "Windowing", "href": "docs/windowing/index.html" },
         { "title": "Magnitude", "href": "docs/log-magnitude/index.html" },
         { "title": "FFT", "href": "docs/fft/index.html" },
-        { "title": "CFAR", "href": "docs/cfar/index.html" }
+        { "title": "CFAR", "href": "docs/cfar/index.html" },
+        { "title": "Chipyard Integration", "href": "docs/chipyard-integration/index.html" }
       ]
     }
   ],
