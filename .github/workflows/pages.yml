@@ -61,6 +61,7 @@ jobs:
           make docs_magnitude_html
           make docs_preprocessing_html
           make docs_windowing_html
+          make docs_chipyard_integration_html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
