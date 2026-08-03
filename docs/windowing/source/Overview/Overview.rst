@@ -140,13 +140,14 @@ SystemVerilog Generation
 You can generate SystemVerilog using either AXI4 or TL as the memory-mapped control
 interface.
 
-From the ``opera-soc`` root, load the environment and use:
+Use the following commands in the project root folder:
 
 .. code-block:: bash
 
-   source ./env.sh
-   sbt "project opera-windowing; runMain opera.windowing.AXI4App"
-   sbt "project opera-windowing; runMain opera.windowing.TLApp"
+  # AXI4 Version
+  sbt "project windowing; runMain opera.windowing.AXI4App"
+  # TileLink Version
+  sbt "project windowing; runMain opera.windowing.TLApp"
 
 This writes the AXI4 variant to ``./rtl/WindowingAXI4`` and the TileLink variant to
 ``./rtl/WindowingTL``.
@@ -155,10 +156,8 @@ You can also pass a JSON configuration file:
 
 .. code-block:: bash
 
-   sbt "project opera-windowing; runMain opera.windowing.AXI4App \
-     generators/opera-dsp/windowing/src/main/resources/parameters.json"
-   sbt "project opera-windowing; runMain opera.windowing.TLApp \
-     generators/opera-dsp/windowing/src/main/resources/parameters.json"
+   sbt "project windowing; runMain opera.windowing.AXI4App windowing/src/main/resources/parameters.json"
+   sbt "project windowing; runMain opera.windowing.TLApp windowing/src/main/resources/parameters.json"
 
 The example JSON configuration is available
 `on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/windowing/src/main/resources/parameters.json>`_.
@@ -166,15 +165,14 @@ The example JSON configuration is available
 Tests
 -----
 
-From the ``opera-soc`` root, run:
+To run tests, use the following command in the project root folder:
 
 .. code-block:: bash
 
-   source ./env.sh
-   sbt "project opera-windowing; test"
+   sbt "project windowing; test"
 
 Waveforms are disabled by default; set ``WIN_VCD=1`` to enable them. Test artifacts are
-written under ``generators/opera-dsp/windowing/test_run_dir/``.
+written under ``windowing/test_run_dir/``.
 
 Source Code
 -----------
