@@ -5,7 +5,7 @@
   },
   "ramAddress": {
     "base": "0x00003000",
-    "mask": "0x00000FFF"
+    "mask": "0x000003FF"
   },
   "parameters": {
     "inputWidth"    : 16,
@@ -14,13 +14,18 @@
     "outputBinPoint": 14,
     "coeffWidth"    : 16,
     "coeffBinPoint" : 14,
-    "numPoints"     : 1024,
+    "numPoints"     : 256,
+    "runTime"       : true,
     "constWindow"   : false,
     "trimType"      : "Convergent",
     "memoryFile"    : "./test_run_dir/window.txt",
     "windowFunc"    : "BlackmanWindow",
     "customFile"    : "./test_run_dir/window_32.txt",
     "periodic"      : true,
-    "sigma"         : 0.5
+    "sigma"         : 0.5,
+    "mulPipeRegs"   : 0,
+    "roundPipeRegs" : 0,
+    "romStyle"      : "Distributed",
+    "foldSymmetric" : false
   }
 }

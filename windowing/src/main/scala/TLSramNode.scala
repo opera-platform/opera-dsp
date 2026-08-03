@@ -1,7 +1,7 @@
 package opera.windowing
 
 import chisel3._
-import chisel3.util.{Cat, log2Ceil}
+import chisel3.util.Cat
 import freechips.rocketchip.diplomacy.{AddressSet, RegionType, TransferSizes}
 import freechips.rocketchip.resources._
 import freechips.rocketchip.tilelink._
@@ -30,33 +30,27 @@ case class TLSramNode(
     minLatency = 0)
   ))
 {
-  require (address.contiguous)
+  require(address.contiguous)
 
-  private def bigBits(x: BigInt, tail: List[Boolean] = Nil): List[Boolean] =
-    if (x == 0) tail.reverse else bigBits(x >> 1, ((x & 1) == 1) :: tail)
-
-  private def mask: List[Boolean] = bigBits(address.mask >> log2Ceil(beatBytes))
+  private val addressMask = Utils.addressMaskBits(address, beatBytes)
 
   def srammap(sram: SyncReadMem[Vec[UInt]]): Unit = {
     val (in, edge) = this.in.head
 
-    val addressBits = (mask zip edge.addr_hi(in.a.bits).asBools).filter(_._1).map(_._2)
+    val addressBits = addressMask.zip(edge.addr_hi(in.a.bits).asBools).filter(_._1).map(_._2)
     val memAddress = Cat(addressBits.reverse)
 
     // "Flow control"
     in.a.ready := in.d.ready
     in.d.valid := in.a.valid
 
-    val hasData = edge.hasData(in.a.bits)
-    val wdata = VecInit(Seq.tabulate(1) { i => in.a.bits.data })
-
     in.d.bits.source := in.a.bits.source
     in.d.bits.size := in.a.bits.size
     in.d.bits.data := 0.U
     in.d.bits.corrupt := 0.U
     in.d.bits.opcode := TLMessages.AccessAck
-    when(in.a.fire && hasData) {
-      sram.write(memAddress, wdata)
+    when(in.a.fire && edge.hasData(in.a.bits)) {
+      sram.write(memAddress, VecInit(Seq(in.a.bits.data)))
     }
 
     // Tie off unused channels

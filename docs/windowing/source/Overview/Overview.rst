@@ -1,9 +1,12 @@
 Windowing Overview
-======================
+==================
 
-The `Windowing` module is part of the OPERA-DSP project. A windowing function is typically used in digital signal processing before performing an FFT to reduce spectral leakage that appears in the frequency spectrum.
+The `Windowing` module is part of the OPERA-DSP project. A windowing function is
+typically applied before an FFT to reduce spectral leakage.
 
-This module extends the `DspBlock <https://chipyard.readthedocs.io/en/latest/Customization/Dsptools-Blocks.html>`_ trait for modular signal processing integration. 
+This module extends the
+`DspBlock <https://chipyard.readthedocs.io/en/latest/Customization/Dsptools-Blocks.html>`_
+trait for modular signal processing integration.
 
 Supported window functions can be found here:
 
@@ -19,49 +22,82 @@ Below is a simplified block diagram of the Windowing module.
    :align: center
    :width: 800px
 
-User can chose between ROM (Read Only Memory) to store window coefficients or RAM (Random Access Memory). If RAM is used, it is connected via Xbar to the bus.
+Window coefficients can be stored in a fixed ROM or in bus-writable RAM.
 
 Window Parameters
-------------------------
+-----------------
 
 .. code-block:: scala
 
   case class WindowingParams[T <: Data](
-    dataType   : DspComplex[T],
-    numPoints  : Int, 
-    coeffType  : T,
-    runTime    : Boolean,
-    windowFunc : WindowType,
-    memoryFile : String,
+    inputType: DspComplex[T],
+    outputType: DspComplex[T],
+    coeffType: T,
+    numPoints: Int,
+    runTime: Boolean,
+    windowFunc: WindowType,
+    memoryFile: String,
     constWindow: Boolean,
-    trimType   : TrimType
+    trimType: TrimType,
+    mulPipeRegs: Int = 0,
+    roundPipeRegs: Int = 0,
+    romStyle: RomStyle = Distributed,
+    foldSymmetric: Boolean = false
   )
 
-**Parameter descriptions:**
+Parameter descriptions
+~~~~~~~~~~~~~~~~~~~~~~
 
-- ``dataType``:
-  Input data type.
-
-- ``numPoints``:  
-  The maximum size of FFT window.
+- ``inputType`` / ``outputType``:
+  Complex input and output formats. The output binary point and signed integer range
+  must cover the input format. The output binary point must not exceed the product
+  binary point. Disabled Windowing and ``NoWindow`` preserve the numerical input value
+  while converting to the output format.
 
 - ``coeffType``:
-  Coefficient data type.
+  Coefficient format. Coefficients are quantized with round-half-to-even. The Windowing
+  datapath requires finite, representable coefficients whose quantized values are
+  non-negative.
 
-- ``runTime``:  
-  Use run-time configurable chirp size.
+- ``numPoints``:
+  Positive maximum frame and coefficient-table size.
 
-- ``windowFunc``:  
-  Select window function. Please see :doc:`supported functions. <../Modules/WindowFunctions>`
+- ``runTime``:
+  Use the ``chirpsize`` register instead of ``numPoints`` as the active frame size.
 
-- ``memoryFile``:  
-  Text file location in which to store coefficients. Coefficients will be stored in hex format.
+- ``windowFunc``:
+  Select a :doc:`supported window function <../Modules/WindowFunctions>`.
 
-- ``constWindow``:  
-  Select between ROM and RAM for coefficient storage. If values is set to `true` ROM is used, else RAM si used to store coefficients. In case that RAM is used to store coefficients, coefficients can be written to the RAM via the bus (AXI4 or TileLink).
+- ``memoryFile``:
+  Generated coefficient-file path. Values are written as width-padded, two's-complement
+  hexadecimal words.
 
-- ``trimType``:  
-  Trim type (after multiplication). Supported values are: `Floor` (round-down), `Ceiling` (round-up), `Convergent` (round half to even) and `Round` (round half towards infinity).
+- ``constWindow``:
+  Select ROM when true or bus-writable RAM when false. ``NoWindow`` requires ROM mode.
+
+- ``trimType``:
+  Product rounding mode: ``Floor``, ``Ceiling``, ``Convergent`` (half-even), or
+  ``Round`` (half away from zero).
+
+- ``mulPipeRegs`` / ``roundPipeRegs``:
+  Optional elastic product and rounded-output stages. Each value is zero or one, and
+  ``roundPipeRegs`` cannot exceed ``mulPipeRegs``.
+
+- ``romStyle`` / ``foldSymmetric``:
+  Select an asynchronous ``Distributed`` ROM or a ``Synchronous`` ROM. Synchronous ROM
+  requires ``mulPipeRegs=1``. Folding stores the unique half of a bit-exact symmetric
+  window and is limited to fixed, non-runtime, built-in synchronous ROMs.
+
+JSON Configuration
+------------------
+
+The JSON parser requires the address and functional parameter fields shown in the
+example and rejects unknown fields. ``mulPipeRegs``, ``roundPipeRegs``, ``romStyle``,
+and ``foldSymmetric`` are optional and use the defaults shown above. String values use
+the exact names ``Floor``, ``Ceiling``, ``Convergent``, ``Round``, ``Distributed``,
+``Synchronous``, and the window class names listed in the window-function
+documentation. See ``windowing/src/main/resources/parameters.json`` for a complete
+example.
 
 Register Map
 ------------
@@ -71,61 +107,74 @@ The following registers are exposed through the MMIO interface:
 +------------------+-------------+---------+--------------------------------+------------------------+
 | Register Name    | Offset      | Access  | Width                          | Description            |
 +==================+=============+=========+================================+========================+
-| chirpsize        | 0*beatBytes | R/W     | log2Ceil(params.numPoints + 1) | FFT window size        |
+| chirpsize        | 0*beatBytes | R/W     | log2Ceil(numPoints + 1)        | Active frame size      |
 +------------------+-------------+---------+--------------------------------+------------------------+
-| ctrl             | 1*beatBytes | R/W     | log2Ceil(MaxChirpSize + 1)     | Enable windowing block |
+| ctrl             | 1*beatBytes | R/W     | 1                              | Enable Windowing       |
 +------------------+-------------+---------+--------------------------------+------------------------+
 
 
-- ``chirpsize``: Defines the expected FFT window size.
+- ``chirpsize``: Defines the active frame size when ``runTime`` is enabled. Software
+  must program a value from one through ``numPoints`` and change it only while the
+  stream is idle. A smaller ROM size uses the leading entries of the original table;
+  a genuine M-point runtime window requires RAM mode, an M-point coefficient table,
+  and ``chirpsize=M``.
 
-- ``ctrl``: Contains control bits to enable or disable Windowing block. If disabled, input data is just passed to output.
+- ``ctrl``: Bit zero enables coefficient multiplication. When clear, samples bypass
+  multiplication while retaining the configured pipeline latency.
 
-IOs
----
+Streaming Behavior
+------------------
 
-The module includes I/Os provided by the `DspBlock <https://chipyard.readthedocs.io/en/latest/Customization/Dsptools-Blocks.html>`_ trait (AXI4-Stream input/output and memory-mapped I/O).
+The AXI4-Stream input and output use ready/valid flow control. A sample and its
+``last`` and enable state advance only when accepted, and the output remains stable
+under backpressure. The coefficient address resets after an accepted ``last`` or the
+active frame size, so the next accepted sample uses coefficient zero. With no stalls,
+all configurations accept one sample per cycle.
+
+Distributed ROM and ``NoWindow`` have no coefficient-read delay. RAM and synchronous
+ROM add one read cycle; each enabled pipeline option adds one further cycle.
 
 SystemVerilog Generation
 ------------------------
 
-You can generate SystemVerilog from the Windowing block using either AXI4 or TL as the memory-mapped control interface.
+You can generate SystemVerilog using either AXI4 or TL as the memory-mapped control
+interface.
 
-Use the following commands in the project root folder:
-
-.. code-block:: bash
-
-   # AXI4 Version
-   sbt "project windowing; runMain opera.windowing.AXI4App"
-   # TileLink Version
-   sbt "project windowing; runMain opera.windowing.TLApp"
-
-This generates SystemVerilog code in the ``./rtl/WindowingAXI4`` folder for the AXI4 variant or ``./rtl/WindowingTL`` for the TileLink variant.
-
-Additionally, you can pass the path to a JSON file containing Windowing parameters, for example:
+From the ``opera-soc`` root, load the environment and use:
 
 .. code-block:: bash
 
-   # AXI4 Version
-   sbt "project windowing; runMain opera.windowing.AXI4App windowing/src/main/resources/parameters.json"
-   # TileLink Version
-   sbt "project windowing; runMain opera.windowing.TLApp windowing/src/main/resources/parameters.json"
+   source ./env.sh
+   sbt "project opera-windowing; runMain opera.windowing.AXI4App"
+   sbt "project opera-windowing; runMain opera.windowing.TLApp"
 
-You can find the example JSON configuration file `on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/windowing/src/main/resources/parameters.json>`_.
+This writes the AXI4 variant to ``./rtl/WindowingAXI4`` and the TileLink variant to
+``./rtl/WindowingTL``.
+
+You can also pass a JSON configuration file:
+
+.. code-block:: bash
+
+   sbt "project opera-windowing; runMain opera.windowing.AXI4App \
+     generators/opera-dsp/windowing/src/main/resources/parameters.json"
+   sbt "project opera-windowing; runMain opera.windowing.TLApp \
+     generators/opera-dsp/windowing/src/main/resources/parameters.json"
+
+The example JSON configuration is available
+`on GitHub <https://github.com/opera-platform/opera-dsp/blob/main/windowing/src/main/resources/parameters.json>`_.
 
 Tests
 -----
 
-To run tests, use the following command in the project root folder:
+From the ``opera-soc`` root, run:
 
 .. code-block:: bash
 
-   # AXI4 Version
-   sbt "project windowing; testOnly opera.windowing.WindowingAXI4Spec"
-   # TileLink Version
-   sbt "project windowing; testOnly opera.windowing.WindowingTLSpec"
+   source ./env.sh
+   sbt "project opera-windowing; test"
 
-Output directory is ``.windowing/test_run_dir/``.
+Waveforms are disabled by default; set ``WIN_VCD=1`` to enable them. Test artifacts are
+written under ``generators/opera-dsp/windowing/test_run_dir/``.
 
 Source Code
 -----------

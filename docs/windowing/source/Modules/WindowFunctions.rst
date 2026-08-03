@@ -3,6 +3,8 @@ Supported windowing functions
 
 This module provides several windowing functions commonly used in signal processing,
 including Triangular, Hamming, Hanning, Blackman, Gaussian, and custom-defined windows.
+Built-in windows support periodic and symmetric forms. A one-point built-in window
+contains the single coefficient ``1.0``.
 
 Classes
 -------
@@ -251,7 +253,8 @@ NoWindow
 
 .. class:: NoWindow()
 
-   Placeholder for when no windowing is needed.
+   Selects value-preserving bypass operation. It must be used with
+   ``constWindow=true`` because no coefficient memory is required.
 
    **Attributes:**
 
@@ -269,10 +272,15 @@ CustomWindow
 
 .. class:: CustomWindow(filePath: String)
 
-   Loads window coefficients from a user-provided text file.
+   Loads window coefficients from a file-system path or classpath resource.
 
-   :param filePath: Path to the file containing window coefficients. Coefficients in file should be stored as real numbers. For example: -2.52, 3.14, 1.0 etc. Each coefficient should be placed on new line.
+   :param filePath: File or resource containing one real-valued coefficient per line.
    :type filePath: String
+
+   Empty lines are ignored. The path must be readable, the file must contain at least
+   one coefficient, and every non-empty line must be numeric. Coefficients used by the
+   Windowing datapath must be finite and representable by ``coeffType``, with
+   non-negative quantized values. They are quantized using round-half-to-even.
 
    **Attributes:**
 
@@ -280,28 +288,5 @@ CustomWindow
    - **function** (*Option[Seq[Double]]*): Window coefficients read from file
 
 
-   **Methods:**
-
-   .. method:: toString
-
-      Returns a string identifier for the window.
-
-   .. method:: function
-
-      Returns the window values as a sequence.
-
-    .. code-block:: scala
-
-      val function: Option[Seq[Double]] = Some(
-        Using(Source.fromFile(filePath)) { source =>
-          source.getLines()
-            .flatMap(line => Try(line.trim.toDouble).toOption)
-            .toSeq
-        }.getOrElse {
-          println(s"Failed to read file: $filePath.\n")
-          Seq.empty[Double]
-        }
-      )
-
-
-
+   Custom windows do not declare periodicity and therefore cannot use symmetric ROM
+   folding. When used by Windowing, the file length must match ``numPoints``.

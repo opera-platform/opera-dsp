@@ -148,6 +148,8 @@ To generate AXI4 or TileLink variants of the Windowing block, use the following 
 $ make rtl_windowing_axi4
 # TileLink
 $ make rtl_windowing_tl
+# Both variants
+$ make rtl_windowing_all
 ```
 
 The generated SystemVerilog code will be located in the `./rtl` folder.
@@ -157,17 +159,26 @@ The generated SystemVerilog code will be located in the `./rtl` folder.
 To run the Windowing tests, use the following command in the project root directory:
 
 ```bash
-# AXI4
+# AXI4 individual matrices
+$ make test_windowing_binPoint_axi4
+$ make test_windowing_functions_axi4
+# All AXI4 matrices
 $ make test_windowing_axi4
-# TileLink
+# TileLink individual matrices
+$ make test_windowing_binPoint_tl
+$ make test_windowing_functions_tl
+# All TileLink matrices
 $ make test_windowing_tl
-# For both TileLink and AXI4 tests
+# Focused functional regression
+$ make test_windowing_functional
+# All Windowing tests
 $ make test_windowing_all
 ```
 
-Test results will be stored in the `./test_run_dir` folder. 
+Test results will be stored in the `./windowing/test_run_dir` folder.
 
-By default 672 tests will be run for both AXI4 and TileLink variants of the Windowing. For each (TileLink or AXI4), tests will take around 30 minutes. The tests can be found in folder [/windowing/src/test/scala/](windowing/src/test/scala). To reduce the number of tests, modify the [WindowingAXI4Spec](windowing/src/test/scala/WindowingAXI4Spec.scala) and/or [WindowingTLSpec](windowing/src/test/scala/WindowingTLSpec.scala) parameters.
+The tests are in
+[/windowing/src/test/scala/](windowing/src/test/scala).
 
 ## Magnitude block
 

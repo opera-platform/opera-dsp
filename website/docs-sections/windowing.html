@@ -11,20 +11,33 @@
 $ make rtl_windowing_axi4
 
 <span class="cm"># TileLink</span>
-$ make rtl_windowing_tl</code></pre>
+$ make rtl_windowing_tl
+
+<span class="cm"># Both variants</span>
+$ make rtl_windowing_all</code></pre>
 
 <h3>Tests</h3>
-<pre><code><span class="cm"># AXI4 only</span>
+<pre><code><span class="cm"># AXI4 individual matrices</span>
 $ make test_windowing_binPoint_axi4
 $ make test_windowing_functions_axi4
 
-<span class="cm"># TileLink only</span>
+<span class="cm"># All AXI4 matrices</span>
+$ make test_windowing_axi4
+
+<span class="cm"># TileLink individual matrices</span>
 $ make test_windowing_binPoint_tl
 $ make test_windowing_functions_tl
 
-<span class="cm"># Both variants</span>
+<span class="cm"># All TileLink matrices</span>
+$ make test_windowing_tl
+
+<span class="cm"># Focused functional regression</span>
+$ make test_windowing_functional
+
+<span class="cm"># All eight Windowing suites</span>
 $ make test_windowing_all</code></pre>
 <p>
-  672 tests per variant, ~30 minutes each. Modify <code>WindowingAXI4Spec.scala</code>
-  or <code>WindowingTLSpec.scala</code> to adjust.
+  BinPoint contains 648 cases per protocol and Functions contains 624, giving 1,272
+  legacy cases per protocol. The focused regression adds 15 tests, while
+  <code>test_windowing_all</code> runs all 2,559 tests.
 </p>
